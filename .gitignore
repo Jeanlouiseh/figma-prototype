@@ -29,7 +29,7 @@ lerna-debug.log*
 
 # OS
 .DS_Store
-Thumbsdb
+Thumbs.db
 
 # Testing
 /coverage

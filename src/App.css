@@ -9,3 +9,39 @@
   overflow-y: auto;
   background-color: #f5f5f5;
 }
+
+.eyebrow {
+  color: #2d6a4f;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  margin-bottom: 0.65rem;
+}
+
+.dashboard-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px !important;
+  background: #fbfcfd !important;
+  border: 1px solid #b9c1c5 !important;
+}
+
+.dashboard-hero::after {
+  display: none;
+}
+
+.dashboard-page { min-height: 100vh; background: #dfe4e7; }
+.topbar { height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 12px; background: #fff; border-bottom: 1px solid #c6cdd0; }
+.topbar .MuiInputBase-root { background: #fff; font-size: 12px; }
+.canvas-heading { height: 55px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid #4c575d; }
+.canvas-heading .MuiButton-root { text-transform: none; border-color: #aab4b9; color: #536066; }
+.canvas-heading .MuiButton-contained { background: #087f6c; color: #fff; border: 0; }
+.tile-grid { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: 216px 216px; margin: 0 !important; width: 100%; }
+.tile-grid-item { min-height: 216px; width: auto !important; max-width: none !important; padding: 0 !important; }
+.tile-grid-item-0 { grid-row: span 2; }
+.tile-grid-item .MuiCard-root { border: 1px solid #b9c1c5; border-radius: 12px; background: #fbfcfd; box-shadow: none; }
+.tile-grid-item .MuiCard-root:hover { box-shadow: none; transform: none; }
+
+@media (max-width: 700px) {
+  .page-header { align-items: flex-start !important; flex-direction: column; gap: 1.25rem; }
+}
