@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Box, CssBaseline, ThemeProvider, createTheme } from '@mui/material';
 import Sidebar from './components/Sidebar';
 import ProjectDashboard from './pages/ProjectDashboard';
 import ClashDetection from './pages/ClashDetection';
+import CreateClashTest from './pages/CreateClashTest';
+import ClashTestDetail from './pages/ClashTestDetail';
 import './App.css';
 
 const theme = createTheme({
@@ -15,7 +17,7 @@ const theme = createTheme({
       main: '#1976D2',
     },
     background: {
-      default: '#F5F5F5',
+      default: '#dfe4e7',
     },
   },
   typography: {
@@ -24,18 +26,19 @@ const theme = createTheme({
 });
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('dashboard');
-
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Router>
         <Box sx={{ display: 'flex', height: '100vh' }}>
-          <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+          <Sidebar />
           <Box sx={{ flex: 1, overflow: 'auto' }}>
             <Routes>
               <Route path="/" element={<ProjectDashboard />} />
               <Route path="/clash-detection" element={<ClashDetection />} />
+              <Route path="/clash-detection/new" element={<CreateClashTest />} />
+              <Route path="/clash-detection/test/:id" element={<ClashTestDetail />} />
+              <Route path="/clash-detection/detail" element={<ClashTestDetail />} />
             </Routes>
           </Box>
         </Box>
