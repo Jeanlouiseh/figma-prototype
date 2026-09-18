@@ -19,17 +19,19 @@ import FitScreenOutlinedIcon from '@mui/icons-material/FitScreenOutlined';
 import NearMeOutlinedIcon from '@mui/icons-material/NearMeOutlined';
 import StraightenOutlinedIcon from '@mui/icons-material/StraightenOutlined';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import { getModelForIModel } from '../utils/pittsburghModels';
 
 const IModelQuickViewModal = ({
   open,
   onClose,
-  modelName = 'Parkway',
+  modelName = 'Roberto Clemente Bridge',
   selectedSetA = [],
   selectedSetB = [],
 }) => {
   const mountRef = useRef(null);
   const [activeSetFilter, setActiveSetFilter] = useState('all'); // 'all', 'A', 'B'
   const [activeTool, setActiveTool] = useState('rotate'); // 'pan', 'rotate', 'select', 'measure'
+  const [viewerReadyKey, setViewerReadyKey] = useState(0);
   const controlsRef = useRef(null);
 
   useEffect(() => {
@@ -71,84 +73,15 @@ const IModelQuickViewModal = ({
     fillLight.position.set(-20, 10, -20);
     scene.add(fillLight);
 
-    // Group holding the 3D structural beam and MEP model matching the exact screenshot geometry
-    const modelGroup = new THREE.Group();
-
-    // Red beams material (Set A structural members) with dark outlines
-    const redMat = new THREE.MeshStandardMaterial({
-      color: 0xd32f2f, // Vivid red matching the screenshot
-      roughness: 0.35,
-      metalness: 0.4,
-    });
-
-    // Dark blue / navy conduit/utility pipe running across
-    const blueMat = new THREE.MeshStandardMaterial({
-      color: 0x0d233a, // Deep navy blue line from screenshot
-      roughness: 0.25,
-      metalness: 0.8,
-    });
-
-    const setAGroup = new THREE.Group();
-    const setBGroup = new THREE.Group();
-
-    // Helper to add edges to meshes for CAD-like wireframe outlines
-    const createBeamWithEdges = (geo, mat) => {
-      const mesh = new THREE.Mesh(geo, mat);
-      const edges = new THREE.EdgesGeometry(geo);
-      const line = new THREE.LineSegments(
-        edges,
-        new THREE.LineBasicMaterial({ color: 0x1a1a1a, linewidth: 1.5 })
-      );
-      mesh.add(line);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      return mesh;
-    };
-
-    // 1. Long front-diagonal red beam: from bottom left towards center
-    // Slanted along diagonal
-    const beam1 = createBeamWithEdges(new THREE.BoxGeometry(0.85, 0.95, 12), redMat);
-    beam1.position.set(-5, 0, 5);
-    beam1.rotation.y = -Math.PI / 4;
-    setAGroup.add(beam1);
-
-    // 2. Middle cross-beam running rightwards
-    const beam2 = createBeamWithEdges(new THREE.BoxGeometry(0.85, 0.95, 9), redMat);
-    beam2.position.set(0.5, 1.2, 0);
-    beam2.rotation.y = Math.PI / 4;
-    setAGroup.add(beam2);
-
-    // 3. Middle transverse beam (perpendicular)
-    const beam3 = createBeamWithEdges(new THREE.BoxGeometry(11, 0.95, 0.85), redMat);
-    beam3.position.set(2, 2.4, -2.5);
-    beam3.rotation.y = -Math.PI / 4;
-    setAGroup.add(beam3);
-
-    // 4. Rear elevated red I-beam (supported by vertical stub column)
-    const rearBeam = createBeamWithEdges(new THREE.BoxGeometry(0.95, 1.2, 7), redMat);
-    rearBeam.position.set(6.5, 4.2, -6.5);
-    rearBeam.rotation.y = -Math.PI / 4;
-    setAGroup.add(rearBeam);
-
-    // Vertical column post supporting rear beam
-    const colPost = createBeamWithEdges(new THREE.CylinderGeometry(0.2, 0.2, 2.2, 12), redMat);
-    colPost.position.set(5.5, 3.1, -5.5);
-    setAGroup.add(colPost);
-
-    // 5. Blue slender pipe / conduit connecting across the structural elements (Set B Interference)
-    const pipePoints = [
-      new THREE.Vector3(-1.8, 2.2, 1.2),
-      new THREE.Vector3(5.5, 4.1, -5.5),
-    ];
-    const pipeCurve = new THREE.CatmullRomCurve3(pipePoints);
-    const pipeGeo = new THREE.TubeGeometry(pipeCurve, 20, 0.14, 12, false);
-    const pipeMesh = new THREE.Mesh(pipeGeo, blueMat);
-    pipeMesh.castShadow = true;
-    setBGroup.add(pipeMesh);
-
-    modelGroup.add(setAGroup);
-    modelGroup.add(setBGroup);
+    const bridge = getModelForIModel(modelName, THREE, { showWater: true });
+    const modelGroup = bridge.modelGroup;
+    const setAGroup = bridge.setAGroup;
+    const setBGroup = bridge.setBGroup;
     scene.add(modelGroup);
+
+    camera.position.copy(bridge.defaultCameraPos);
+    target.copy(bridge.defaultTarget);
+    camera.lookAt(target);
 
     // Orbit & Pan controls
     let isMouseDown = false;
@@ -223,8 +156,8 @@ const IModelQuickViewModal = ({
 
     controlsRef.current = {
       resetView: () => {
-        target.set(0, 1.5, 0);
-        camera.position.set(22, 16, 26);
+        target.copy(bridge.defaultTarget);
+        camera.position.copy(bridge.defaultCameraPos);
         camera.lookAt(target);
       },
     };
@@ -261,7 +194,7 @@ const IModelQuickViewModal = ({
       dom.removeEventListener('wheel', onWheel);
       renderer.dispose();
     };
-  }, [open, activeSetFilter, activeTool]);
+  }, [open, modelName, activeSetFilter, activeTool, viewerReadyKey]);
 
   return (
     <Dialog
@@ -269,6 +202,9 @@ const IModelQuickViewModal = ({
       onClose={onClose}
       maxWidth="lg"
       fullWidth
+      TransitionProps={{
+        onEntered: () => setViewerReadyKey((key) => key + 1),
+      }}
       PaperProps={{
         sx: {
           borderRadius: 2,

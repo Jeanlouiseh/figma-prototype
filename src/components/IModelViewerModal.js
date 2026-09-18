@@ -65,8 +65,8 @@ function buildTiedArchBridge(scene, elementGroups) {
   deckPlate.receiveShadow = true;
   deckGroup.add(deckPlate);
 
-  // Longitudinal box girders (Set A blue)
-  const girderMat = new THREE.MeshStandardMaterial({ color: 0x1976d2, roughness: 0.4, metalness: 0.75 });
+  // Longitudinal box girders (Set A Pittsburgh Aztec Gold)
+  const girderMat = new THREE.MeshStandardMaterial({ color: 0xd99500, roughness: 0.4, metalness: 0.6 });
   [-5.2, 5.2].forEach((z) => {
     const girder = new THREE.Mesh(new THREE.BoxGeometry(56, 2.2, 1.1), girderMat);
     girder.position.set(0, 6.2, z);
@@ -83,9 +83,9 @@ function buildTiedArchBridge(scene, elementGroups) {
   scene.add(deckGroup);
   elementGroups['deck-girders'] = deckGroup;
 
-  // Arch Ribs (Set A signature)
+  // Eyebar Suspension Chains & Towers (Roberto Clemente Bridge signature Aztec Gold)
   const archGroup = new THREE.Group();
-  const archMat = new THREE.MeshStandardMaterial({ color: 0x1e88e5, roughness: 0.35, metalness: 0.8 });
+  const archMat = new THREE.MeshStandardMaterial({ color: 0xf2a900, roughness: 0.35, metalness: 0.65 });
   [-5.2, 5.2].forEach((z) => {
     const points = [];
     const span = 28;
@@ -102,12 +102,27 @@ function buildTiedArchBridge(scene, elementGroups) {
     archMesh.castShadow = true;
     archGroup.add(archMesh);
   });
+
+  // Twin Suspension Towers
+  [-11, 11].forEach((tx) => {
+    [-5.2, 5.2].forEach((tz) => {
+      const towerLeg = new THREE.Mesh(new THREE.BoxGeometry(2.0, 22.0, 2.0), archMat);
+      towerLeg.position.set(tx, 14.0, tz);
+      towerLeg.castShadow = true;
+      archGroup.add(towerLeg);
+    });
+    // Tower Portal Arched Transom
+    const portal = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.2, 11.5), archMat);
+    portal.position.set(tx, 16.5, 0);
+    archGroup.add(portal);
+  });
+
   scene.add(archGroup);
   elementGroups['arch-ribs'] = archGroup;
 
   // Overhead K-Bracing & Portals
   const braceGroup = new THREE.Group();
-  const braceMat = new THREE.MeshStandardMaterial({ color: 0x00acc1, roughness: 0.4, metalness: 0.8 });
+  const braceMat = new THREE.MeshStandardMaterial({ color: 0xfdb813, roughness: 0.35, metalness: 0.6 });
   for (let t = -0.7; t <= 0.7; t += 0.28) {
     const x = t * 28;
     const y = 7.5 + (1 - t * t) * 18;
@@ -381,14 +396,18 @@ function buildParkwayStation(scene, elementGroups) {
 const IModelViewerModal = ({
   open,
   onClose,
-  modelName = 'Tied Arch Bridge',
+  modelName = 'Roberto Clemente Bridge',
   selectedSetA = [],
   selectedSetB = [],
   onSelectElement,
 }) => {
   const mountRef = useRef(null);
   const [activeModelKey, setActiveModelKey] = useState(
-    modelName.includes('Parkway') || modelName.includes('Data') ? 'Parkway' : 'Tied Arch Bridge'
+    modelName.includes('Liberty') || modelName.includes('Data')
+      ? 'Liberty Bridge'
+      : modelName.includes('PPG') || modelName.includes('Tied')
+      ? 'PPG Place'
+      : 'Roberto Clemente Bridge'
   );
   const [selectedClash, setSelectedClash] = useState(null);
   const [treeSearch, setTreeSearch] = useState('');
@@ -400,16 +419,18 @@ const IModelViewerModal = ({
 
   // Get current active model configuration
   const activeModel = useMemo(() => {
-    return MODELS_REGISTRY[activeModelKey] || MODELS_REGISTRY['Tied Arch Bridge'];
+    return MODELS_REGISTRY[activeModelKey] || MODELS_REGISTRY['Roberto Clemente Bridge'];
   }, [activeModelKey]);
 
   // Sync activeModelKey when prop changes
   useEffect(() => {
     if (modelName) {
-      if (modelName.includes('Parkway') || modelName.includes('Data')) {
-        setActiveModelKey('Parkway');
+      if (modelName.includes('Liberty') || modelName.includes('Data')) {
+        setActiveModelKey('Liberty Bridge');
+      } else if (modelName.includes('PPG') || modelName.includes('Tied')) {
+        setActiveModelKey('PPG Place');
       } else {
-        setActiveModelKey('Tied Arch Bridge');
+        setActiveModelKey('Roberto Clemente Bridge');
       }
     }
   }, [modelName]);
@@ -528,7 +549,7 @@ const IModelViewerModal = ({
 
     // Build model geometry based on activeModelKey
     const elementGroups = {};
-    if (activeModelKey === 'Tied Arch Bridge') {
+    if (activeModelKey === 'Roberto Clemente Bridge' || activeModelKey === 'Tied Arch Bridge') {
       buildTiedArchBridge(scene, elementGroups);
     } else {
       buildParkwayStation(scene, elementGroups);
@@ -816,8 +837,9 @@ const IModelViewerModal = ({
               },
             }}
           >
-            <MenuItem value="Tied Arch Bridge">Tied Arch Bridge</MenuItem>
-            <MenuItem value="Parkway">Parkway Station / Facility</MenuItem>
+            <MenuItem value="Roberto Clemente Bridge">Roberto Clemente Bridge</MenuItem>
+            <MenuItem value="Liberty Bridge">Liberty Bridge</MenuItem>
+            <MenuItem value="PPG Place">PPG Place</MenuItem>
           </TextField>
 
           <Chip label="WebGL 3D Live" size="small" sx={{ backgroundColor: '#087f6c', color: '#fff', fontWeight: 600, fontSize: 11 }} />

@@ -23,10 +23,10 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 const ProjectDashboard = () => {
   const [projects, setProjects] = useState([
-    { id: 1, title: 'Parkway Station', description: 'Transit hub redevelopment', status: 'In progress', clashes: 12, updated: '2h ago' },
+    { id: 1, title: 'Roberto Clemente Bridge', description: 'Transit hub redevelopment', status: 'In progress', clashes: 12, updated: '2h ago' },
     { id: 2, title: 'North Quay Offices', description: 'Commercial fit-out', status: 'In review', clashes: 4, updated: 'Yesterday' },
-    { id: 3, title: 'Tied Arch Bridge', description: 'Structural infrastructure', status: 'In progress', clashes: 8, updated: '3 days ago' },
-    { id: 4, title: 'Data Centre 01', description: 'Mission-critical facilities', status: 'Planning', clashes: 0, updated: '8 days ago' },
+    { id: 3, title: 'PPG Place', description: 'Structural infrastructure', status: 'In progress', clashes: 8, updated: '3 days ago' },
+    { id: 4, title: 'Liberty Bridge', description: 'Mission-critical facilities', status: 'Planning', clashes: 0, updated: '8 days ago' },
   ]);
 
   const [selectedProject, setSelectedProject] = useState('');
@@ -49,8 +49,8 @@ const ProjectDashboard = () => {
   return (
     <Box className="dashboard-page" sx={{ p: 0 }}>
       <Box className="topbar">
-        <TextField select size="small" value="Parkway Station" SelectProps={{ IconComponent: ExpandMoreIcon }} sx={{ width: 150 }}>
-          <MenuItem value="Parkway Station">Project name</MenuItem>
+        <TextField select size="small" value="Roberto Clemente Bridge" SelectProps={{ IconComponent: ExpandMoreIcon }} sx={{ width: 180 }}>
+          <MenuItem value="Roberto Clemente Bridge">Project name</MenuItem>
         </TextField>
         <Breadcrumbs separator="/" sx={{ fontSize: 12, ml: 1 }}><Link underline="always" color="text.primary" href="#">Link</Link><Link underline="always" color="text.primary" href="#">Link</Link></Breadcrumbs>
         <TextField size="small" placeholder="Search" sx={{ width: 120, ml: 'auto' }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 16 }} /></InputAdornment> }} />

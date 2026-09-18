@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
@@ -8,7 +8,6 @@ import {
   Divider,
   IconButton,
   Link,
-  Menu,
   MenuItem,
   Paper,
   Popover,
@@ -26,48 +25,328 @@ import IModelViewerModal from '../components/IModelViewerModal';
 import IModelQuickViewModal from '../components/IModelQuickViewModal';
 import SuppressionRulesDrawer from '../components/SuppressionRulesDrawer';
 
-// Hierarchical element tree matching the Models tab in the design
-export const MODEL_ELEMENTS_TREE = [
-  {
-    id: 'drainage',
-    name: 'DrainageRegion01',
-    defaultExpanded: false,
-    children: [
-      { id: 'dr_pipes', name: 'DR_Pipes' },
-      { id: 'dr_manholes', name: 'DR_Manholes' },
-      { id: 'dr_catchbasins', name: 'DR_CatchBasins' },
-      { id: 'dr_outfalls', name: 'DR_Outfalls' },
+const createOptionGroup = (id, name, children) => ({
+  id,
+  name,
+  children: children.map((childName) => ({
+    id: `${id}_${childName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
+    name: childName,
+  })),
+});
+
+const ROBERTO_CLEMENTE_SET_OPTIONS = {
+  A: {
+    models: [
+      createOptionGroup('rc_a_bridge_structural_dgn', 'RCB_Bridge_Structural.dgn', [
+        'Three-Hinged Tied Arch Ribs',
+        'Portal Towers & Transoms',
+        'Eyebar Suspension Chains',
+        'Vertical Hanger Cables',
+        'Steel Floorbeams & Stringers',
+        'Orthotropic Deck Plate',
+      ]),
+      createOptionGroup('rc_a_substructure_dgn', 'RCB_Substructure.dgn', [
+        'North Shore Abutment',
+        'Downtown Abutment',
+        'River Pier Pedestals',
+        'Bearing Assemblies',
+      ]),
+    ],
+    categories: [
+      createOptionGroup('rc_a_cat_structural_steel', 'Structural Steel', [
+        'Arch Rib Members',
+        'Portal Bracing',
+        'Floor Framing',
+        'Connection Plates',
+      ]),
+      createOptionGroup('rc_a_cat_concrete', 'Concrete', [
+        'Abutment Walls',
+        'Pier Caps',
+        'Deck Overlay',
+      ]),
+      createOptionGroup('rc_a_cat_bridge_accessories', 'Bridge Accessories', [
+        'Sidewalk Rails',
+        'Expansion Joints',
+        'Maintenance Platforms',
+      ]),
+    ],
+    groups: [
+      createOptionGroup('rc_a_grp_main_span', 'Main Span Structure', [
+        'West Arch Line',
+        'East Arch Line',
+        'Center Deck Framing',
+      ]),
+      createOptionGroup('rc_a_grp_north_approach', 'North Shore Approach', [
+        'North Approach Deck',
+        'North Bearing Zone',
+      ]),
+      createOptionGroup('rc_a_grp_downtown_approach', 'Downtown Approach', [
+        'Downtown Approach Deck',
+        'Downtown Bearing Zone',
+      ]),
     ],
   },
-  {
-    id: 'geom_align',
-    name: 'Geometry_Project_Align',
-    defaultExpanded: false,
-    children: [
-      { id: 'align_base', name: 'Align_Baseline' },
-      { id: 'align_center', name: 'Align_Centerline' },
-      { id: 'align_prof', name: 'Align_Profile' },
-      { id: 'align_superelev', name: 'Align_Superelevation' },
+  B: {
+    models: [
+      createOptionGroup('rc_b_utilities_dgn', 'RCB_Utilities.dgn', [
+        'Storm Drainage Piping',
+        'Deck Lighting Conduit',
+        'Navigation Light Feeders',
+        'Maintenance Power Raceways',
+      ]),
+      createOptionGroup('rc_b_mechanical_dgn', 'RCB_Maintenance_MEP.dgn', [
+        'Utility Service Ducts',
+        'Heat Trace Lines',
+        'Control Cabinets',
+      ]),
+    ],
+    categories: [
+      createOptionGroup('rc_b_cat_plumbing', 'Plumbing', [
+        'Storm Drain Mains',
+        'Downspouts',
+        'Scuppers',
+      ]),
+      createOptionGroup('rc_b_cat_electrical', 'Electrical', [
+        'Cable Trays',
+        'Lighting Conduit',
+        'Panel Feeders',
+      ]),
+      createOptionGroup('rc_b_cat_mechanical', 'Mechanical', [
+        'Ventilation Ducts',
+        'Heat Trace Assemblies',
+      ]),
+    ],
+    groups: [
+      createOptionGroup('rc_b_grp_deck_utilities', 'Deck Utility Runs', [
+        'West Side Utility Corridor',
+        'East Side Utility Corridor',
+        'Underdeck Crossovers',
+      ]),
+      createOptionGroup('rc_b_grp_pier_services', 'Pier Service Zones', [
+        'North Pier Services',
+        'South Pier Services',
+      ]),
     ],
   },
-  {
-    id: 'i95_geom',
-    name: 'I-95_Geometry',
-    defaultExpanded: true,
-    children: [
-      { id: 'e_road_edge', name: 'E_Road_EdgeOfPavement' },
-      { id: 'e_road_lane', name: 'E_Road_LaneEdge' },
-      { id: 'e_road_shoulder', name: 'E_Road_Shoulder' },
-      { id: 'e_terrain_break', name: 'E_Terrain_Breakline' },
-      { id: 'default_item', name: 'Default' },
-      { id: 'matchline', name: 'Matchline' },
-      { id: 'geom_civil_cell', name: 'Geom_Civil_Cell_Control' },
-      { id: 'ref_i95_median', name: 'Ref, I95_Median Crossover' },
-      { id: 'z_construction', name: 'z_Construction' },
-      { id: 'i95_median_cross', name: 'I95_MedianCrossover' },
+};
+
+const LIBERTY_BRIDGE_SET_OPTIONS = {
+  A: {
+    models: [
+      createOptionGroup('lib_a_truss_dgn', 'Liberty_Bridge_Truss.dgn', [
+        'Cantilever Deck Trusses',
+        'Lower Chord Assemblies',
+        'Diagonal Web Members',
+        'Floorbeams & Stringers',
+        'Outrigger Deck Brackets',
+      ]),
+      createOptionGroup('lib_a_roadway_dgn', 'Liberty_Roadway_Deck.dgn', [
+        'Asphalt Roadway Deck',
+        'Concrete Barriers',
+        'Stone River Piers',
+        'Liberty Tunnel Portal',
+      ]),
+    ],
+    categories: [
+      createOptionGroup('lib_a_cat_structural_steel', 'Structural Steel', [
+        'Deck Truss Chords',
+        'Truss Diagonals',
+        'Floor Framing',
+        'Bearing Shoes',
+      ]),
+      createOptionGroup('lib_a_cat_transportation', 'Transportation', [
+        'Roadway Surface',
+        'Lane Markings',
+        'Traffic Barriers',
+        'Sign Gantries',
+      ]),
+      createOptionGroup('lib_a_cat_masonry', 'Masonry / Stone', [
+        'River Pier Masonry',
+        'Tunnel Portal Stone',
+        'Pylon Caps',
+      ]),
+    ],
+    groups: [
+      createOptionGroup('lib_a_grp_main_cantilever', 'Main Cantilever Span', [
+        'West Cantilever Arm',
+        'East Cantilever Arm',
+        'Suspended Center Span',
+      ]),
+      createOptionGroup('lib_a_grp_south_hills', 'South Hills Approach', [
+        'Tunnel Portal Approach',
+        'South Approach Framing',
+      ]),
+      createOptionGroup('lib_a_grp_downtown', 'Downtown Approach', [
+        'North Approach Framing',
+        'Downtown Ramp Tie-In',
+      ]),
     ],
   },
-];
+  B: {
+    models: [
+      createOptionGroup('lib_b_hydronics_dgn', 'Liberty_Deck_Hydronics.dgn', [
+        'Hydronic Deicing Supply Loop',
+        'Hydronic Deicing Return Loop',
+        'Heat Exchanger Connections',
+        'Zone Valve Boxes',
+      ]),
+      createOptionGroup('lib_b_fire_dgn', 'Liberty_FireProtection.dgn', [
+        'Dry Standpipe Header',
+        'Standpipe Risers',
+        'Sprinkler Branch Lines',
+        'Fire Department Connections',
+      ]),
+    ],
+    categories: [
+      createOptionGroup('lib_b_cat_mechanical', 'Mechanical', [
+        'Hydronic Deicing',
+        'Glycol Supply Piping',
+        'Tunnel Ventilation',
+      ]),
+      createOptionGroup('lib_b_cat_fire_protection', 'Fire Protection', [
+        'Dry Standpipes',
+        'Wet Sprinkler Lines',
+        'Inspector Test Connections',
+      ]),
+      createOptionGroup('lib_b_cat_electrical', 'Electrical', [
+        'Heat Trace Circuits',
+        'Deicing Controls',
+        'Sensor Conduit',
+      ]),
+    ],
+    groups: [
+      createOptionGroup('lib_b_grp_deck_deicing', 'Deck Deicing Zones', [
+        'Zone 1 Supply / Return',
+        'Zone 2 Supply / Return',
+        'Expansion Joint Heat Trace',
+      ]),
+      createOptionGroup('lib_b_grp_fire_risers', 'Fire Protection Risers', [
+        'Pier 1 Standpipe Zone',
+        'Pier 2 Standpipe Zone',
+        'Tunnel Portal Sprinklers',
+      ]),
+    ],
+  },
+};
+
+const PPG_PLACE_SET_OPTIONS = {
+  A: {
+    models: [
+      createOptionGroup('ppg_a_architecture_dgn', 'PPG_Place_Architecture.dgn', [
+        'Glass Curtain Wall Panels',
+        'Gothic Spires & Turrets',
+        'Granite Base Facade',
+        'Wintergarden Framing',
+      ]),
+      createOptionGroup('ppg_a_structure_dgn', 'PPG_Tower_Structure.dgn', [
+        'Steel Moment Frame',
+        'Concrete Core Walls',
+        'Transfer Girders',
+        'Plaza Slab',
+      ]),
+    ],
+    categories: [
+      createOptionGroup('ppg_a_cat_architecture', 'Architecture', [
+        'Curtain Wall',
+        'Spandrel Panels',
+        'Lobby Storefront',
+        'Granite Cladding',
+      ]),
+      createOptionGroup('ppg_a_cat_structural', 'Structural', [
+        'Steel Columns',
+        'Composite Beams',
+        'Core Shear Walls',
+        'Roof Framing',
+      ]),
+      createOptionGroup('ppg_a_cat_site', 'Site / Plaza', [
+        'Plaza Pavers',
+        'Fountain Basin',
+        'Street Edge Curbs',
+      ]),
+    ],
+    groups: [
+      createOptionGroup('ppg_a_grp_tower_core', 'Tower Core', [
+        'Central Elevator Core',
+        'Stair Core Walls',
+        'Mechanical Floor Framing',
+      ]),
+      createOptionGroup('ppg_a_grp_crown', 'Crown and Spires', [
+        'Central Spire Cluster',
+        'Corner Turrets',
+        'Roof Screen Framing',
+      ]),
+      createOptionGroup('ppg_a_grp_plaza', 'Plaza Level', [
+        'Wintergarden Entrance',
+        'Plaza Fountain',
+        'Retail Pavilion Facades',
+      ]),
+    ],
+  },
+  B: {
+    models: [
+      createOptionGroup('ppg_b_mep_dgn', 'PPG_Tower_MEP.dgn', [
+        'Main Mechanical Risers',
+        'Supply Air Shafts',
+        'Return Air Shafts',
+        'Condenser Water Risers',
+      ]),
+      createOptionGroup('ppg_b_electrical_dgn', 'PPG_Electrical_Distribution.dgn', [
+        'Bus Duct Risers',
+        'Cable Tray Banks',
+        'Emergency Power Feeders',
+        'Lighting Control Panels',
+      ]),
+      createOptionGroup('ppg_b_plumbing_dgn', 'PPG_Plumbing_Fire.dgn', [
+        'Domestic Water Risers',
+        'Sanitary Stacks',
+        'Fire Standpipe Mains',
+        'Sprinkler Mains',
+      ]),
+    ],
+    categories: [
+      createOptionGroup('ppg_b_cat_mechanical', 'Mechanical', [
+        'HVAC Ductwork',
+        'Hydronic Piping',
+        'Mechanical Equipment',
+      ]),
+      createOptionGroup('ppg_b_cat_electrical', 'Electrical', [
+        'Busway',
+        'Cable Trays',
+        'Conduit Banks',
+      ]),
+      createOptionGroup('ppg_b_cat_plumbing_fire', 'Plumbing / Fire Protection', [
+        'Water Risers',
+        'Waste Piping',
+        'Sprinkler Piping',
+        'Standpipes',
+      ]),
+    ],
+    groups: [
+      createOptionGroup('ppg_b_grp_riser_shafts', 'Riser Shafts', [
+        'North Mechanical Shaft',
+        'South Electrical Shaft',
+        'Core Plumbing Chase',
+      ]),
+      createOptionGroup('ppg_b_grp_mechanical_floors', 'Mechanical Floors', [
+        'Low-Rise Mechanical Level',
+        'Mid-Rise Mechanical Level',
+        'Penthouse Mechanical Level',
+      ]),
+      createOptionGroup('ppg_b_grp_lobby_services', 'Lobby Service Zones', [
+        'Retail MEP Distribution',
+        'Wintergarden HVAC',
+        'Plaza Fountain Equipment',
+      ]),
+    ],
+  },
+};
+
+const getSetOptionsForIModel = (iModel) => {
+  const normalized = (iModel || '').toLowerCase();
+  if (normalized.includes('liberty')) return LIBERTY_BRIDGE_SET_OPTIONS;
+  if (normalized.includes('ppg')) return PPG_PLACE_SET_OPTIONS;
+  return ROBERTO_CLEMENTE_SET_OPTIONS;
+};
 
 // Diamond empty set illustration
 const EmptySetIcon = (props) => (
@@ -82,7 +361,8 @@ const EmptySetIcon = (props) => (
 const CreateClashTest = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const testInfo = location.state || { name: 'Test name', iModel: 'Parkway', description: '' };
+  const testInfo = location.state || { name: 'Test name', iModel: 'Roberto Clemente Bridge', description: '' };
+  const setOptions = useMemo(() => getSetOptionsForIModel(testInfo.iModel), [testInfo.iModel]);
 
   // Set selections (start empty for new test configuration)
   const [setAItems, setSetAItems] = useState([]);
@@ -111,13 +391,10 @@ const CreateClashTest = () => {
   const [activePopoverSet, setActivePopoverSet] = useState(null);
   const [popoverAnchorEl, setPopoverAnchorEl] = useState(null);
   const [activeTab, setActiveTab] = useState('models');
+  const [setSearchQueries, setSetSearchQueries] = useState({ A: '', B: '' });
 
   // Hovered item for trash icon display
   const [hoveredItemId, setHoveredItemId] = useState(null);
-
-  // Remove menu state
-  const [removeAnchorEl, setRemoveAnchorEl] = useState(null);
-  const [removeTargetSet, setRemoveTargetSet] = useState(null);
 
   // 3D Viewer modal state
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -156,6 +433,24 @@ const CreateClashTest = () => {
   const [includeNonPhysical, setIncludeNonPhysical] = useState(false);
   const [runAutomatically, setRunAutomatically] = useState(false);
 
+  const getOptionGroupsForSet = (setKey, tab = activeTab) => setOptions[setKey]?.[tab] || [];
+  const getAllOptionGroupsForSet = (setKey) =>
+    ['models', 'categories', 'groups'].flatMap((tab) => getOptionGroupsForSet(setKey, tab));
+  const filterOptionGroups = (groups, query) => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return groups;
+
+    return groups
+      .map((group) => {
+        const groupMatches = group.name.toLowerCase().includes(normalizedQuery);
+        const matchingChildren = groupMatches
+          ? group.children
+          : group.children.filter((child) => child.name.toLowerCase().includes(normalizedQuery));
+        return matchingChildren.length > 0 ? { ...group, children: matchingChildren } : null;
+      })
+      .filter(Boolean);
+  };
+
   const roundedCheckboxSx = {
     p: 0.5,
     color: '#8a9296',
@@ -183,6 +478,7 @@ const CreateClashTest = () => {
 
   const handleOpenPopover = (event, targetSet) => {
     setActivePopoverSet(targetSet);
+    setActiveTab('models');
     setPopoverAnchorEl(event.currentTarget);
   };
 
@@ -246,11 +542,19 @@ const CreateClashTest = () => {
     }
   };
 
+  const handleRemoveGroupItems = (childIds, targetSet) => {
+    const isSetA = targetSet === 'A' || targetSet === 'Set A';
+    if (isSetA) {
+      setSetAItems((prev) => prev.filter((id) => !childIds.includes(id)));
+    } else {
+      setSetBItems((prev) => prev.filter((id) => !childIds.includes(id)));
+    }
+  };
+
   const handleClearAll = (targetSet) => {
     const isSetA = targetSet === 'A' || targetSet === 'Set A';
     if (isSetA) setSetAItems([]);
     else setSetBItems([]);
-    setRemoveAnchorEl(null);
   };
 
   const renderSetCard = (badgeColor, badgeLetter, targetSet, selfCheck, setSelfCheck, clearance, setClearance) => {
@@ -259,6 +563,8 @@ const CreateClashTest = () => {
     const selectedItems = isSetA ? setAItems : setBItems;
     const expandedMap = isSetA ? setAExpanded : setBExpanded;
     const setExpandedMap = isSetA ? setSetAExpanded : setSetBExpanded;
+    const selectedOptionGroups = getAllOptionGroupsForSet(setKey);
+    const searchQuery = setSearchQueries[setKey] || '';
 
     return (
       <Paper
@@ -297,46 +603,20 @@ const CreateClashTest = () => {
             <Typography sx={{ fontWeight: 600, fontSize: 16, color: '#1c1f21' }}>Set {badgeLetter}</Typography>
           </Box>
 
-          {selectedItems.length > 0 ? (
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={(e) => {
-                setRemoveTargetSet(setKey);
-                setRemoveAnchorEl(e.currentTarget);
-              }}
-              endIcon={<KeyboardArrowDownIcon sx={{ fontSize: 16, color: '#4a555b' }} />}
-              sx={{
-                textTransform: 'none',
-                color: '#1c1f21',
-                borderColor: '#c2c9cd',
-                borderRadius: '4px',
-                fontSize: 13,
-                fontWeight: 400,
-                px: 1.25,
-                py: 0.25,
-                height: 28,
-                '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
-              }}
-            >
-              Remove
-            </Button>
-          ) : (
-            <Button
-              onClick={() => handleClearAll(setKey)}
-              sx={{
-                textTransform: 'none',
-                color: '#087f6c',
-                fontWeight: 600,
-                fontSize: 13,
-                p: 0,
-                minWidth: 'auto',
-                '&:hover': { backgroundColor: 'transparent', textDecoration: 'underline' },
-              }}
-            >
-              Clear all
-            </Button>
-          )}
+          <Button
+            onClick={() => handleClearAll(setKey)}
+            sx={{
+              textTransform: 'none',
+              color: '#087f6c',
+              fontWeight: 600,
+              fontSize: 13,
+              p: 0,
+              minWidth: 'auto',
+              '&:hover': { backgroundColor: 'transparent', textDecoration: 'underline' },
+            }}
+          >
+            Clear all
+          </Button>
         </Box>
 
         {/* Search box trigger */}
@@ -344,23 +624,31 @@ const CreateClashTest = () => {
           placeholder="Search or browse to add elements"
           size="small"
           fullWidth
+          value={searchQuery}
+          onChange={(e) => {
+            setActivePopoverSet(setKey);
+            setSetSearchQueries((prev) => ({ ...prev, [setKey]: e.target.value }));
+            if (activePopoverSet !== setKey) {
+              handleOpenPopover(e, setKey);
+            }
+          }}
+          onFocus={(e) => handleOpenPopover(e, setKey)}
           onClick={(e) => handleOpenPopover(e, setKey)}
           InputProps={{
-            readOnly: true,
             startAdornment: <SearchIcon sx={{ fontSize: 18, color: '#8a9296', mr: 1 }} />,
             endAdornment: <ExpandMoreIcon sx={{ fontSize: 20, color: '#8a9296' }} />,
           }}
           sx={{
             mb: 2.5,
-            cursor: 'pointer',
+            cursor: 'text',
             '& .MuiOutlinedInput-root': {
-              cursor: 'pointer',
+              cursor: 'text',
               borderRadius: '6px',
               fontSize: 13,
               '& fieldset': { borderColor: '#c2c9cd' },
               '&:hover fieldset': { borderColor: '#087f6c' },
             },
-            '& input': { cursor: 'pointer' },
+            '& input': { cursor: 'text' },
           }}
         />
 
@@ -386,41 +674,73 @@ const CreateClashTest = () => {
           </Box>
         ) : (
           <Box sx={{ flex: 1, overflowY: 'auto', pr: 0.5 }}>
-            {MODEL_ELEMENTS_TREE.map((group) => {
+            {selectedOptionGroups.map((group) => {
               const matchingChildItems = group.children.filter((c) => selectedItems.includes(c.id));
               if (matchingChildItems.length === 0) return null;
 
               const isExpanded = expandedMap[group.id] !== false;
+              const isGroupHovered = hoveredItemId === `${targetSet}-${group.id}`;
 
               return (
                 <Box key={group.id} sx={{ mb: 1 }}>
                   {/* Category / Model row header */}
                   <Box
-                    onClick={() =>
-                      setExpandedMap((prev) => ({
-                        ...prev,
-                        [group.id]: !isExpanded,
-                      }))
-                    }
+                    onMouseEnter={() => setHoveredItemId(`${targetSet}-${group.id}`)}
+                    onMouseLeave={() => setHoveredItemId(null)}
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 0.75,
-                      py: 0.75,
-                      px: 0.5,
-                      cursor: 'pointer',
+                      justifyContent: 'space-between',
+                      px: 1.25,
+                      py: 0.65,
+                      borderRadius: '4px',
+                      my: 0.25,
                       borderBottom: '1px solid #eaedf0',
-                      '&:hover': { backgroundColor: '#f8fafb' },
+                      backgroundColor: isGroupHovered ? '#f5f5f5' : 'transparent',
+                      transition: 'background-color 0.15s',
                     }}
                   >
-                    {isExpanded ? (
-                      <KeyboardArrowUpIcon sx={{ fontSize: 18, color: '#2a3337' }} />
-                    ) : (
-                      <KeyboardArrowDownIcon sx={{ fontSize: 18, color: '#2a3337' }} />
-                    )}
-                    <Typography sx={{ fontSize: 13.5, fontWeight: 500, color: '#1c1f21' }}>
-                      {group.name}
-                    </Typography>
+                    <Box
+                      onClick={() =>
+                        setExpandedMap((prev) => ({
+                          ...prev,
+                          [group.id]: !isExpanded,
+                        }))
+                      }
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 0.75,
+                        cursor: 'pointer',
+                        minWidth: 0,
+                        flex: 1,
+                      }}
+                    >
+                      {isExpanded ? (
+                        <KeyboardArrowUpIcon sx={{ fontSize: 18, color: '#2a3337', flexShrink: 0 }} />
+                      ) : (
+                        <KeyboardArrowDownIcon sx={{ fontSize: 18, color: '#2a3337', flexShrink: 0 }} />
+                      )}
+                      <Typography sx={{ fontSize: 13.5, fontWeight: 500, color: '#1c1f21' }} noWrap>
+                        {group.name}
+                      </Typography>
+                    </Box>
+                    <IconButton
+                      size="small"
+                      aria-label={`Remove ${group.name}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveGroupItems(matchingChildItems.map((item) => item.id), targetSet);
+                      }}
+                      sx={{
+                        p: 0.4,
+                        color: '#2a3337',
+                        visibility: isGroupHovered ? 'visible' : 'hidden',
+                        '&:hover': { color: '#d32f2f' },
+                      }}
+                    >
+                      <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
                   </Box>
 
                   {/* Child element list rows with hover trash button */}
@@ -517,6 +837,15 @@ const CreateClashTest = () => {
       </Paper>
     );
   };
+
+  const activePopoverSetKey = activePopoverSet || 'A';
+  const activeSetSearchQuery = setSearchQueries[activePopoverSetKey] || '';
+  const filteredPopoverGroups = filterOptionGroups(
+    activeSetSearchQuery.trim()
+      ? getAllOptionGroupsForSet(activePopoverSetKey)
+      : getOptionGroupsForSet(activePopoverSetKey),
+    activeSetSearchQuery
+  );
 
   return (
     <Box sx={{ p: 0, backgroundColor: '#fff', height: '100vh', minHeight: '650px', display: 'flex', flexDirection: 'column' }}>
@@ -842,6 +1171,9 @@ const CreateClashTest = () => {
         open={Boolean(popoverAnchorEl)}
         anchorEl={popoverAnchorEl}
         onClose={handleClosePopover}
+        disableAutoFocus
+        disableEnforceFocus
+        disableRestoreFocus
         anchorOrigin={{
           vertical: 'bottom',
           horizontal: 'left',
@@ -925,33 +1257,11 @@ const CreateClashTest = () => {
               Groups
             </Typography>
           </Box>
-          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', pb: 0.8 }}>
-            <Box
-              sx={{
-                width: 18,
-                height: 18,
-                borderRadius: '50%',
-                backgroundColor: activePopoverSet === 'A' ? '#1976d2' : '#d04a02',
-                color: '#fff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 10,
-                fontWeight: 700,
-                mr: 0.5,
-              }}
-            >
-              {activePopoverSet || 'A'}
-            </Box>
-            <Typography sx={{ fontSize: 11, fontWeight: 600, color: activePopoverSet === 'A' ? '#1976d2' : '#d04a02' }}>
-              Set {activePopoverSet || 'A'}
-            </Typography>
-          </Box>
         </Box>
 
         {/* Tree Content */}
         <Box sx={{ flex: 1, overflowY: 'auto', p: 1.25 }}>
-          {MODEL_ELEMENTS_TREE.map((group) => {
+          {filteredPopoverGroups.map((group) => {
             const isGroupExpanded = popoverExpanded[group.id] !== false;
             const currentSetItems = activePopoverSet === 'A' ? setAItems : setBItems;
             const childIds = group.children.map((c) => c.id);
@@ -1040,40 +1350,19 @@ const CreateClashTest = () => {
               </Box>
             );
           })}
+          {filteredPopoverGroups.length === 0 && (
+            <Typography sx={{ px: 1, py: 2, fontSize: 13, color: '#657075' }}>
+              No matching elements
+            </Typography>
+          )}
         </Box>
       </Popover>
-
-      {/* Remove Dropdown Menu */}
-      <Menu
-        anchorEl={removeAnchorEl}
-        open={Boolean(removeAnchorEl)}
-        onClose={() => setRemoveAnchorEl(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{
-          paper: {
-            sx: {
-              minWidth: 150,
-              borderRadius: '4px',
-              border: '1px solid #c2c9cd',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            },
-          },
-        }}
-      >
-        <MenuItem
-          onClick={() => handleClearAll(removeTargetSet)}
-          sx={{ fontSize: 13, py: 1, color: '#c62839' }}
-        >
-          Remove all items
-        </MenuItem>
-      </Menu>
 
       {/* iModel Quick View Modal matching screenshot */}
       <IModelQuickViewModal
         open={quickViewOpen}
         onClose={() => setQuickViewOpen(false)}
-        modelName={testInfo.iModel || 'Parkway'}
+        modelName={testInfo.iModel || 'Roberto Clemente Bridge'}
         selectedSetA={setAItems}
         selectedSetB={setBItems}
       />
@@ -1096,7 +1385,7 @@ const CreateClashTest = () => {
       <IModelViewerModal
         open={viewerOpen}
         onClose={() => setViewerOpen(false)}
-        modelName={testInfo.iModel || 'Tied Arch Bridge'}
+        modelName={testInfo.iModel || 'Roberto Clemente Bridge'}
         selectedSetA={setAItems}
         selectedSetB={setBItems}
         onSelectElement={(elementName, setBadge) => {

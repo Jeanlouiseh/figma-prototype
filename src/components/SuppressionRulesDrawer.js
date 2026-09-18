@@ -15,6 +15,7 @@ import {
   Checkbox,
   Dialog,
   LinearProgress,
+  Divider,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
@@ -27,10 +28,11 @@ import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 
 // Gavel / hammer icon from the screenshot empty state
 const GavelIcon = (props) => (
@@ -190,32 +192,125 @@ const MOCK_TEST_RULES = {
       targetScope: 'both elements',
     },
   ],
+  'Roberto Clemente Bridge': [
+    {
+      id: 'rc_r1',
+      name: 'Eyebar Suspension Pin Fasteners',
+      description: 'Suppress clearance overlap between suspender pinheads and truss top chord gussets.',
+      suppressBasedOn: 'Model',
+      targetScope: 'one element',
+      attribute1: 'Eyebar_Chains',
+    },
+    {
+      id: 'rc_r2',
+      name: 'Deck Finger Expansion Joints',
+      description: 'Suppress thermal expansion gap intersections between road deck fingers and floor stringers.',
+      suppressBasedOn: 'Category',
+      targetScope: 'both elements',
+      attribute1: 'Deck_Expansion_Fingers',
+      attribute2: 'Steel_Floor_Stringers',
+      isDualCondition: true,
+    },
+    {
+      id: 'rc_r3',
+      name: 'Promenade Picket Luminaire Wiring',
+      description: 'Suppress architectural railing pickets vs low-voltage LED luminaire conduits.',
+      suppressBasedOn: 'Category',
+      targetScope: 'one element',
+      attribute1: 'Promenade_Pickets',
+      attribute2: 'LED_Luminaire_Conduit',
+      isDualCondition: true,
+    },
+  ],
   'Parkway': [
     {
       id: 'pw_r1',
-      name: 'Structural beam connections',
-      description: 'Suppress expected framing intersections.',
-      suppressBasedOn: 'Class',
-      class1: '@Design',
-      class2: '@Window',
+      name: 'Eyebar Suspension Pin Fasteners',
+      description: 'Suppress clearance overlap between suspender pinheads and truss top chord gussets.',
+      suppressBasedOn: 'Model',
+      targetScope: 'one element',
+      attribute1: 'Eyebar_Chains',
+    },
+  ],
+  'PPG Place': [
+    {
+      id: 'ppg_r1',
+      name: 'Gothic Spire Curtain-Wall Outriggers',
+      description: 'Suppress curtain-wall glass facade brackets attaching to corner spire structural outriggers.',
+      suppressBasedOn: 'Category',
+      targetScope: 'both elements',
+      attribute1: 'CurtainWall_Mullions',
+      attribute2: 'Gothic_Spire_Outriggers',
+      isDualCondition: true,
+    },
+    {
+      id: 'ppg_r2',
+      name: 'Wintergarden Space-Frame Purlins',
+      description: 'Suppress atrium diagonal space-frame struts intersecting secondary glazing purlins.',
+      suppressBasedOn: 'Model',
+      targetScope: 'one element',
+      attribute1: 'Wintergarden_SpaceFrame',
+    },
+    {
+      id: 'ppg_r3',
+      name: 'High-Rise Elevator Core Raceways',
+      description: 'Suppress high-voltage elevator traction risers within designated drywall shaft enclosures.',
+      suppressBasedOn: 'Group',
+      selectedGroup: 'Electrical',
     },
   ],
   'Tied Arch Bridge': [
     {
       id: 'tab_r1',
-      name: 'Arch hanger fasteners',
-      description: 'Suppress hanger cable overlaps with structural cross-braces.',
-      suppressBasedOn: 'Model',
+      name: 'Gothic Spire Curtain-Wall Outriggers',
+      description: 'Suppress curtain-wall glass facade brackets attaching to corner spire structural outriggers.',
+      suppressBasedOn: 'Category',
       targetScope: 'both elements',
+      attribute1: 'CurtainWall_Mullions',
+      attribute2: 'Gothic_Spire_Outriggers',
+      isDualCondition: true,
+    },
+  ],
+  'Liberty Bridge': [
+    {
+      id: 'lb_r1',
+      name: 'Tunnel Portal Exhaust Transition',
+      description: 'Suppress mechanical ventilation plenum transitions inside Liberty Tunnel south portal concrete abutment.',
+      suppressBasedOn: 'Category',
+      targetScope: 'both elements',
+      attribute1: 'Tunnel_Portal_Abutment',
+      attribute2: 'Tunnel_Vent_Plenums',
+      isDualCondition: true,
+    },
+    {
+      id: 'lb_r2',
+      name: 'Cantilever Warren Truss Gussets',
+      description: 'Suppress heavy truss gusset plate fastener intersections with deck cross-girders.',
+      suppressBasedOn: 'Model',
+      targetScope: 'one element',
+      attribute1: 'Cantilever_Truss_Gussets',
+    },
+    {
+      id: 'lb_r3',
+      name: 'De-icing Hydronic Loop Sleeves',
+      description: 'Suppress hydronic roadway heating pipes passing through pre-engineered floor beam web sleeves.',
+      suppressBasedOn: 'Category',
+      targetScope: 'one element',
+      attribute1: 'Hydronic_Deicing_Pipes',
+      attribute2: 'Floor_Beam_Webs',
+      isDualCondition: true,
     },
   ],
   'Data Centre - 1': [
     {
       id: 'dc_r1',
-      name: 'Cooling server racks',
-      description: 'Suppress containment airflow baffles.',
-      suppressBasedOn: 'Group',
-      selectedGroup: 'HVAC',
+      name: 'Tunnel Portal Exhaust Transition',
+      description: 'Suppress mechanical ventilation plenum transitions inside Liberty Tunnel south portal concrete abutment.',
+      suppressBasedOn: 'Category',
+      targetScope: 'both elements',
+      attribute1: 'Tunnel_Portal_Abutment',
+      attribute2: 'Tunnel_Vent_Plenums',
+      isDualCondition: true,
     },
   ],
 };
@@ -520,15 +615,60 @@ const SuppressionRulesDrawer = ({
     handleCardMenuClose();
   };
 
-  const handleDuplicateRule = () => {
+  const handleToggleDisableRule = () => {
     if (!menuRule) return;
-    const duplicated = {
+    const isCurrentlyDisabled = Boolean(menuRule.disabled);
+    const updatedRule = {
       ...menuRule,
-      id: Date.now(),
-      name: `${menuRule.name} (Copy)`,
+      disabled: !isCurrentlyDisabled,
     };
-    onSaveRule(duplicated);
+    if (onSaveRule) {
+      onSaveRule(updatedRule);
+    }
     setHasUnsavedChanges(true);
+    handleCardMenuClose();
+  };
+
+  const handleExportRuleCsv = () => {
+    if (!menuRule) return;
+    const ruleNameClean = (menuRule.name || 'suppression_rule').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const status = menuRule.disabled ? 'Disabled' : 'Active';
+
+    let conditionSummary = '';
+    if (menuRule.suppressBasedOn === 'Model') {
+      conditionSummary = `Model: ${menuRule.attribute1 || 'Pipes'}`;
+    } else if (menuRule.suppressBasedOn === 'Category') {
+      conditionSummary = `Category: ${menuRule.attribute1 || 'Pipes'} vs ${menuRule.attribute2 || 'Walls'}`;
+    } else if (menuRule.suppressBasedOn === 'Property') {
+      conditionSummary = `Property: ${menuRule.property1 || '@Design'}=${menuRule.propertyVal1 || '36'}`;
+    } else if (menuRule.suppressBasedOn === 'ECSQL expression') {
+      conditionSummary = 'ECSQL custom expression';
+    } else if (menuRule.suppressBasedOn === 'Relationship') {
+      conditionSummary = `Relationship: ${menuRule.relSourceClass || ''} -> ${menuRule.relTargetClass || ''} via ${menuRule.relViaClass || ''}`;
+    } else {
+      conditionSummary = menuRule.suppressBasedOn || 'Condition';
+    }
+
+    const headers = ['ID', 'Rule Name', 'Type', 'Target Scope', 'Status', 'Condition Summary', 'Description', 'Imported From'];
+    const row = [
+      menuRule.id,
+      `"${(menuRule.name || '').replace(/"/g, '""')}"`,
+      `"${(menuRule.suppressBasedOn || '').replace(/"/g, '""')}"`,
+      `"${(menuRule.targetScope || 'one element').replace(/"/g, '""')}"`,
+      status,
+      `"${conditionSummary.replace(/"/g, '""')}"`,
+      `"${(menuRule.description || '').replace(/"/g, '""')}"`,
+      `"${(menuRule.importedFrom || '').replace(/"/g, '""')}"`,
+    ];
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), row.join(',')].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `${ruleNameClean}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
     handleCardMenuClose();
   };
 
@@ -1580,14 +1720,36 @@ const SuppressionRulesDrawer = ({
                   border: '1px solid #c2c9cd',
                   borderRadius: '8px',
                   p: 2.5,
-                  backgroundColor: '#edf1f3',
+                  backgroundColor: rule.disabled ? '#f6f8f9' : '#edf1f3',
+                  opacity: rule.disabled ? 0.65 : 1,
+                  transition: 'all 0.2s ease',
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 0.5 }}>
                   <Box>
-                    <Typography sx={{ fontWeight: 600, fontSize: 15, color: '#1c1f21' }}>
-                      {rule.name}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography sx={{ fontWeight: 600, fontSize: 15, color: rule.disabled ? '#657075' : '#1c1f21' }}>
+                        {rule.name}
+                      </Typography>
+                      {rule.disabled && (
+                        <Typography
+                          component="span"
+                          sx={{
+                            fontSize: 10.5,
+                            fontWeight: 600,
+                            color: '#536066',
+                            backgroundColor: '#e0e4e6',
+                            px: 0.8,
+                            py: 0.15,
+                            borderRadius: '4px',
+                            lineHeight: 1.2,
+                            letterSpacing: '0.02em',
+                          }}
+                        >
+                          Disabled
+                        </Typography>
+                      )}
+                    </Box>
                     <Typography sx={{ fontSize: 12.5, color: '#657075', mt: 0.25 }}>
                       {rule.suppressBasedOn || 'Category'}
                     </Typography>
@@ -1676,7 +1838,7 @@ const SuppressionRulesDrawer = ({
         </Box>
       )}
 
-      {/* Card Context Menu (Edit / Duplicate / Delete) */}
+      {/* Card Context Menu matching Figma _MenuList_ */}
       <Menu
         anchorEl={menuAnchorEl}
         open={Boolean(menuAnchorEl)}
@@ -1684,29 +1846,83 @@ const SuppressionRulesDrawer = ({
         slotProps={{
           paper: {
             sx: {
-              minWidth: 160,
-              borderRadius: '6px',
-              border: '1px solid #c2c9cd',
-              boxShadow: '0 4px 14px rgba(0,0,0,0.1)',
+              minWidth: 175,
+              borderRadius: '4px',
+              border: '1px solid #d4d8db',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+              py: 0.5,
             },
           },
         }}
       >
-        <MenuItem onClick={handleEditRule} sx={{ fontSize: 13, py: 1 }}>
-          <ListItemIcon sx={{ color: '#536066', minWidth: 32 }}>
-            <EditOutlinedIcon fontSize="small" />
+        <MenuItem
+          onClick={handleToggleDisableRule}
+          sx={{
+            fontSize: 13,
+            py: 0.85,
+            px: 1.5,
+            color: '#1c1f21',
+            '&:hover': { backgroundColor: '#f0f3f5' },
+          }}
+        >
+          <ListItemIcon sx={{ color: '#2c3437', minWidth: 28 }}>
+            {menuRule?.disabled ? (
+              <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+            ) : (
+              <VisibilityOffOutlinedIcon sx={{ fontSize: 18 }} />
+            )}
+          </ListItemIcon>
+          {menuRule?.disabled ? 'Enable rule' : 'Disable rule'}
+        </MenuItem>
+
+        <Divider sx={{ my: 0.25, borderColor: '#e4e7e9' }} />
+
+        <MenuItem
+          onClick={handleExportRuleCsv}
+          sx={{
+            fontSize: 13,
+            py: 0.85,
+            px: 1.5,
+            color: '#1c1f21',
+            '&:hover': { backgroundColor: '#f0f3f5' },
+          }}
+        >
+          <ListItemIcon sx={{ color: '#2c3437', minWidth: 28 }}>
+            <FileUploadOutlinedIcon sx={{ fontSize: 18 }} />
+          </ListItemIcon>
+          Export rule as .csv
+        </MenuItem>
+
+        <Divider sx={{ my: 0.25, borderColor: '#e4e7e9' }} />
+
+        <MenuItem
+          onClick={handleEditRule}
+          sx={{
+            fontSize: 13,
+            py: 0.85,
+            px: 1.5,
+            color: '#1c1f21',
+            '&:hover': { backgroundColor: '#f0f3f5' },
+          }}
+        >
+          <ListItemIcon sx={{ color: '#2c3437', minWidth: 28 }}>
+            <EditOutlinedIcon sx={{ fontSize: 18 }} />
           </ListItemIcon>
           Edit rule
         </MenuItem>
-        <MenuItem onClick={handleDuplicateRule} sx={{ fontSize: 13, py: 1 }}>
-          <ListItemIcon sx={{ color: '#536066', minWidth: 32 }}>
-            <ContentCopyOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          Duplicate rule
-        </MenuItem>
-        <MenuItem onClick={handleDeleteRule} sx={{ fontSize: 13, py: 1, color: '#c62839' }}>
-          <ListItemIcon sx={{ color: '#c62839', minWidth: 32 }}>
-            <DeleteOutlineIcon fontSize="small" />
+
+        <MenuItem
+          onClick={handleDeleteRule}
+          sx={{
+            fontSize: 13,
+            py: 0.85,
+            px: 1.5,
+            color: '#1c1f21',
+            '&:hover': { backgroundColor: '#f0f3f5' },
+          }}
+        >
+          <ListItemIcon sx={{ color: '#2c3437', minWidth: 28 }}>
+            <DeleteOutlineIcon sx={{ fontSize: 18 }} />
           </ListItemIcon>
           Delete rule
         </MenuItem>

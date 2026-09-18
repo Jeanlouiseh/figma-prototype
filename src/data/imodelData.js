@@ -293,33 +293,55 @@ export const PARKWAY_STATION_CLASHES = [
 ];
 
 export const MODELS_REGISTRY = {
-  'Tied Arch Bridge': {
-    name: 'Tied Arch Bridge',
+  'Roberto Clemente Bridge': {
+    name: 'Roberto Clemente Bridge (Pittsburgh, PA)',
     components: TIED_ARCH_BRIDGE_COMPONENTS,
     clashes: TIED_ARCH_BRIDGE_CLASHES,
     cameraInitial: [38, 22, 42],
     targetInitial: [0, 8, 0],
   },
-  'Parkway': {
-    name: 'Parkway Station / Facility',
+  'Liberty Bridge': {
+    name: 'Liberty Bridge (Pittsburgh, PA)',
     components: PARKWAY_STATION_COMPONENTS,
     clashes: PARKWAY_STATION_CLASHES,
     cameraInitial: [28, 20, 32],
     targetInitial: [0, 6, 0],
+  },
+  'PPG Place': {
+    name: 'PPG Place (Pittsburgh, PA)',
+    components: TIED_ARCH_BRIDGE_COMPONENTS,
+    clashes: TIED_ARCH_BRIDGE_CLASHES,
+    cameraInitial: [38, 22, 42],
+    targetInitial: [0, 8, 0],
+  },
+  // Legacy aliases
+  'Parkway': {
+    name: 'Roberto Clemente Bridge (Pittsburgh, PA)',
+    components: TIED_ARCH_BRIDGE_COMPONENTS,
+    clashes: TIED_ARCH_BRIDGE_CLASHES,
+    cameraInitial: [38, 22, 42],
+    targetInitial: [0, 8, 0],
   },
   'Parkway Station': {
-    name: 'Parkway Station / Facility',
+    name: 'Roberto Clemente Bridge (Pittsburgh, PA)',
+    components: TIED_ARCH_BRIDGE_COMPONENTS,
+    clashes: TIED_ARCH_BRIDGE_CLASHES,
+    cameraInitial: [38, 22, 42],
+    targetInitial: [0, 8, 0],
+  },
+  'Data Centre - 1': {
+    name: 'Liberty Bridge (Pittsburgh, PA)',
     components: PARKWAY_STATION_COMPONENTS,
     clashes: PARKWAY_STATION_CLASHES,
     cameraInitial: [28, 20, 32],
     targetInitial: [0, 6, 0],
   },
-  'Data Centre - 1': {
-    name: 'Data Centre 01 Facility',
-    components: PARKWAY_STATION_COMPONENTS,
-    clashes: PARKWAY_STATION_CLASHES,
-    cameraInitial: [28, 20, 32],
-    targetInitial: [0, 6, 0],
+  'Tied Arch Bridge': {
+    name: 'PPG Place (Pittsburgh, PA)',
+    components: TIED_ARCH_BRIDGE_COMPONENTS,
+    clashes: TIED_ARCH_BRIDGE_CLASHES,
+    cameraInitial: [38, 22, 42],
+    targetInitial: [0, 8, 0],
   },
 };
 

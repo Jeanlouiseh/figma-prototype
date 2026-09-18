@@ -176,7 +176,7 @@ const ClashDetection = () => {
   const [toastMessage, setToastMessage] = useState('');
   const [deletedBackup, setDeletedBackup] = useState(null);
   const [viewerOpen, setViewerOpen] = useState(false);
-  const [activeViewModel, setActiveViewModel] = useState('Tied Arch Bridge');
+  const [activeViewModel, setActiveViewModel] = useState('Roberto Clemente Bridge');
 
   const showToast = (msg) => setToastMessage(msg);
 
@@ -314,7 +314,7 @@ const ClashDetection = () => {
               ...t,
               name: editFormData.name.trim(),
               description: editFormData.description ? editFormData.description.trim() : '',
-              iModel: editFormData.iModel || 'Parkway',
+              iModel: editFormData.iModel || 'Roberto Clemente Bridge',
               tag: editFormData.tag || t.tag,
             }
           : t
@@ -327,7 +327,7 @@ const ClashDetection = () => {
         id: Date.now(),
         name: editFormData.name.trim(),
         description: editFormData.description ? editFormData.description.trim() : '',
-        iModel: editFormData.iModel || 'Parkway',
+        iModel: editFormData.iModel || 'Roberto Clemente Bridge',
         active: '0',
         total: '0',
         lastRun: 'Never',
@@ -349,7 +349,7 @@ const ClashDetection = () => {
     setVisibleColumns((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const filters = ['All', 'Parkway', 'Data Centre - 1', 'Tied Arch Bridge'];
+  const filters = ['All', 'Roberto Clemente Bridge', 'Liberty Bridge', 'PPG Place'];
 
   const filteredTests = tests.filter((test) => {
     const matchesFilter = selectedFilter === 'All' || test.iModel === selectedFilter;
@@ -393,7 +393,7 @@ const ClashDetection = () => {
         label: '3D BIM Viewer',
         onClick: () => {
           const selected = tests.find((t) => selectedTests.includes(t.id));
-          setActiveViewModel(selected ? selected.iModel : selectedFilter !== 'All' ? selectedFilter : 'Tied Arch Bridge');
+          setActiveViewModel(selected ? selected.iModel : selectedFilter !== 'All' ? selectedFilter : 'Roberto Clemente Bridge');
           setViewerOpen(true);
         },
       },
