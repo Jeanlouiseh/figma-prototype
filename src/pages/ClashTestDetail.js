@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import * as THREE from 'three';
 import {
@@ -23,6 +23,7 @@ import {
   Slider,
   Snackbar,
   Switch,
+  SvgIcon,
   Table,
   TableBody,
   TableCell,
@@ -46,6 +47,9 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
+import RotateRightOutlinedIcon from '@mui/icons-material/RotateRightOutlined';
+import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
@@ -57,12 +61,24 @@ import CloseIcon from '@mui/icons-material/Close';
 import AddPhotoAlternateOutlinedIcon from '@mui/icons-material/AddPhotoAlternateOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import UndoIcon from '@mui/icons-material/Undo';
+import RedoIcon from '@mui/icons-material/Redo';
 import TextFieldsIcon from '@mui/icons-material/TextFields';
+import GestureIcon from '@mui/icons-material/Gesture';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import CropSquareIcon from '@mui/icons-material/CropSquare';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import ClearIcon from '@mui/icons-material/Clear';
+import RemoveIcon from '@mui/icons-material/Remove';
+import OpenInNewOffOutlinedIcon from '@mui/icons-material/OpenInNewOffOutlined';
 import CameraAltOutlinedIcon from '@mui/icons-material/CameraAltOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
 import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
+import dayjs from 'dayjs';
 import { getModelForIModel } from '../utils/pittsburghModels.js';
 import { generateClashesForTest } from '../utils/tailoredClashes.js';
 import { ClashIcon } from '../components/Sidebar';
@@ -87,6 +103,107 @@ const TEST_SETTINGS_TAG_USAGE = [
   { name: 'Doors' },
 ];
 
+const VIEWER_MIN_CAMERA_DISTANCE = 5;
+const VIEWER_MAX_CAMERA_DISTANCE = 60;
+
+const IsolateElementsIcon = (props) => (
+  <SvgIcon {...props} viewBox="0 0 24 24">
+    <path d="M12 4.5 19 8.2 12 12 5 8.2 12 4.5Z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M7 11.2 12 14 17 11.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M8.4 14.8 12 16.8 15.6 14.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="1.1 2" />
+    <path d="M9.8 18.1 12 19.3 14.2 18.1" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="1 2" />
+  </SvgIcon>
+);
+
+// Hosts the 3D viewport either docked in the right panel or expanded into a
+// large in-app modal. The viewport children (including the floating toolbar)
+// stay in the same React tree either way, so clash selection stays in sync
+// with the table in both presentations.
+const ViewerSurface = ({ poppedOut, onDock, iModelName, children }) => (
+  <>
+    {poppedOut ? (
+      <Box
+        sx={{
+          position: 'relative',
+          width: '100%',
+          height: 430,
+          backgroundColor: '#d7dbde',
+          borderBottom: '1px solid #e0e4e6',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Button
+          variant="contained"
+          disableElevation
+          startIcon={<OpenInNewOffOutlinedIcon sx={{ fontSize: 19 }} />}
+          onClick={onDock}
+          sx={{
+            textTransform: 'none',
+            backgroundColor: '#fff',
+            color: '#1c1f21',
+            fontSize: 15,
+            fontWeight: 500,
+            px: 2,
+            py: 1.1,
+            borderRadius: 1,
+            boxShadow: '0 1px 5px rgba(0,0,0,0.2)',
+            '&:hover': { backgroundColor: '#f2f5f6' },
+          }}
+        >
+          Dock iModel
+        </Button>
+      </Box>
+    ) : (
+      <Box sx={{ position: 'relative', width: '100%', height: 430, backgroundColor: '#1a2428', borderBottom: '1px solid #e0e4e6', overflow: 'hidden' }}>
+        {children}
+      </Box>
+    )}
+
+    <Dialog
+      open={poppedOut}
+      onClose={onDock}
+      maxWidth="xl"
+      fullWidth
+      PaperProps={{
+        sx: {
+          borderRadius: 2,
+          backgroundColor: '#fff',
+          overflow: 'hidden',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.18)',
+        },
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, px: 2.5, py: 1.75 }}>
+        <Typography sx={{ fontSize: 17, fontWeight: 500, color: '#1c1f21' }}>
+          {iModelName}
+        </Typography>
+        <Tooltip title="Dock iModel back into panel">
+          <IconButton
+            aria-label="Dock iModel"
+            onClick={onDock}
+            sx={{
+              border: '1px solid #c2c9cd',
+              borderRadius: 1,
+              width: 34,
+              height: 34,
+              color: '#59656d',
+              '&:hover': { backgroundColor: '#f2f5f6' },
+            }}
+          >
+            <CloseIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+      </Box>
+
+      <Box sx={{ position: 'relative', width: '100%', height: '72vh', backgroundColor: '#1a2428', overflow: 'hidden' }}>
+        {children}
+      </Box>
+    </Dialog>
+  </>
+);
+
 // "Suppressed" is a status, not a user-assignable tag, so strip it from
 // generated mock data before it ever reaches tag-related UI.
 const stripSuppressedTag = (clashesList) =>
@@ -94,6 +211,25 @@ const stripSuppressedTag = (clashesList) =>
     ...c,
     tags: (c.tags || []).filter((t) => t !== 'Suppressed'),
   }));
+
+// "Automatic run" defaults to weekly on Mondays at 9:00 AM EST (see the
+// Automatic run summary in the right panel). Pick a random Monday that
+// already occurred in the past to seed the Schedule tab's Start date field.
+const getRandomPastMonday = () => {
+  const today = new Date();
+  const daysSinceMonday = (today.getDay() + 6) % 7;
+  const lastMonday = new Date(today);
+  lastMonday.setDate(today.getDate() - daysSinceMonday);
+
+  const weeksBack = Math.floor(Math.random() * 52) + 1;
+  const randomMonday = new Date(lastMonday);
+  randomMonday.setDate(lastMonday.getDate() - weeksBack * 7);
+
+  const mm = String(randomMonday.getMonth() + 1).padStart(2, '0');
+  const dd = String(randomMonday.getDate()).padStart(2, '0');
+  const yyyy = randomMonday.getFullYear();
+  return `${mm}/${dd}/${yyyy}`;
+};
 
 const CLUSTER_OPTIONS = [
   'Element A',
@@ -108,6 +244,25 @@ const CLUSTER_OPTIONS = [
   'Form',
   'Form status',
 ];
+
+const getClashForms = (clash) => {
+  if (Array.isArray(clash.forms) && clash.forms.length > 0) {
+    return clash.forms;
+  }
+
+  if (clash.hasForm || clash.formId || clash.formStatus) {
+    return [{
+      id: clash.formId || `FORM-${clash.id}`,
+      subject: clash.subject || '',
+      status: clash.formStatus || 'Open',
+      assignedTo: clash.assignedTo || '',
+      dueDate: clash.dueDate || '',
+      comment: clash.comment || '',
+    }];
+  }
+
+  return [];
+};
 
 const getClusterGroups = (clashesList, clusterType) => {
   if (!clusterType) return null;
@@ -153,22 +308,29 @@ const getClusterGroups = (clashesList, clusterType) => {
     const noFormClashes = [];
 
     clashesList.forEach((clash) => {
-      if (clash.hasForm && clash.formId) {
-        if (!formMap.has(clash.formId)) {
-          formMap.set(clash.formId, []);
-        }
-        formMap.get(clash.formId).push(clash);
-      } else {
+      const clashForms = getClashForms(clash);
+
+      if (clashForms.length === 0) {
         noFormClashes.push(clash);
+        return;
       }
+
+      clashForms.forEach((form) => {
+        if (!formMap.has(form.id)) {
+          formMap.set(form.id, {
+            name: form.subject || form.id,
+            clashes: [],
+          });
+        }
+        formMap.get(form.id).clashes.push(clash);
+      });
     });
 
-    formMap.forEach((groupClashes, formId) => {
-      const withSubject = groupClashes.find((c) => c.subject);
+    formMap.forEach((formGroup, formId) => {
       groups.push({
         id: formId,
-        name: withSubject ? withSubject.subject : formId,
-        clashes: groupClashes,
+        name: formGroup.name,
+        clashes: formGroup.clashes,
       });
     });
 
@@ -287,9 +449,10 @@ const highlightModelMesh = (sourceMesh, color, opacity = 0.88) => {
   });
   const originalMaterial = sourceMesh.material;
   sourceMesh.material = material;
+  const originalVisible = sourceMesh.visible;
   const originalRenderOrder = sourceMesh.renderOrder;
   sourceMesh.renderOrder = 1;
-  return { sourceMesh, originalMaterial, originalRenderOrder, material };
+  return { sourceMesh, originalMaterial, originalVisible, originalRenderOrder, material };
 };
 
 const dimModelMeshes = (groups, opacity = 0.22) => {
@@ -306,8 +469,9 @@ const dimModelMeshes = (groups, opacity = 0.22) => {
         opacity,
         depthWrite: false,
       });
+      const originalVisible = object.visible;
       object.material = material;
-      dimmedMeshes.push({ sourceMesh: object, originalMaterial, material });
+      dimmedMeshes.push({ sourceMesh: object, originalMaterial, originalVisible, material });
     });
   });
   return dimmedMeshes;
@@ -318,8 +482,9 @@ const clearModelSelection = (highlightGroup) => {
     ...(highlightGroup.userData.highlightedMeshes || []),
     ...(highlightGroup.userData.dimmedMeshes || []),
   ];
-  selectedMeshes.forEach(({ sourceMesh, originalMaterial, originalRenderOrder, material }) => {
+  selectedMeshes.forEach(({ sourceMesh, originalMaterial, originalVisible, originalRenderOrder, material }) => {
     sourceMesh.material = originalMaterial;
+    if (originalVisible !== undefined) sourceMesh.visible = originalVisible;
     if (originalRenderOrder !== undefined) sourceMesh.renderOrder = originalRenderOrder;
     material.dispose();
   });
@@ -339,6 +504,76 @@ const clearModelSelection = (highlightGroup) => {
   highlightGroup.userData.dimmedMeshes = [];
   highlightGroup.userData.highlightedMeshes = [];
   highlightGroup.userData.selectionCenter = null;
+};
+
+const applyViewerElementVisibility = (highlightGroup, elementAVisible, elementBVisible, isolateNonClashing) => {
+  if (!highlightGroup) return;
+
+  const highlightedMeshes = highlightGroup.userData.highlightedMeshes || [];
+  const highlightedSources = new Set(highlightedMeshes.map(({ sourceMesh }) => sourceMesh));
+
+  (highlightGroup.userData.dimmedMeshes || []).forEach(({ sourceMesh, originalVisible }) => {
+    if (!highlightedSources.has(sourceMesh)) {
+      sourceMesh.visible = isolateNonClashing ? false : originalVisible !== false;
+    }
+  });
+
+  highlightedMeshes.forEach(({ sourceMesh, kind, originalVisible }) => {
+    const baseVisible = originalVisible !== false;
+    if (kind === 'A') sourceMesh.visible = baseVisible && elementAVisible;
+    if (kind === 'B') sourceMesh.visible = baseVisible && elementBVisible;
+  });
+};
+
+const createClashMarkerTexture = (label) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 192;
+  canvas.height = 72;
+  const ctx = canvas.getContext('2d');
+  const radius = 28;
+
+  ctx.shadowColor = 'rgba(0,0,0,0.22)';
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.roundRect(8, 8, 176, 50, 25);
+  ctx.fill();
+
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = '#050505';
+  ctx.beginPath();
+  ctx.arc(36, 33, radius - 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(25, 22);
+  ctx.lineTo(47, 44);
+  ctx.moveTo(47, 22);
+  ctx.lineTo(25, 44);
+  ctx.moveTo(36, 18);
+  ctx.lineTo(36, 27);
+  ctx.moveTo(36, 39);
+  ctx.lineTo(36, 48);
+  ctx.moveTo(21, 33);
+  ctx.lineTo(30, 33);
+  ctx.moveTo(42, 33);
+  ctx.lineTo(51, 33);
+  ctx.stroke();
+
+  ctx.fillStyle = '#1c1f21';
+  ctx.font = '700 28px Arial, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(String(label), 76, 34);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
 };
 
 const ClashTestDetail = () => {
@@ -396,12 +631,18 @@ const ClashTestDetail = () => {
   const imageInputRef = useRef(null);
   const [markupImage, setMarkupImage] = useState(null);
   const [markupColor, setMarkupColor] = useState('#d32f2f');
-  const [markupTool, setMarkupTool] = useState('draw');
+  const [markupTool, setMarkupTool] = useState('pen');
+  const [markupStrokeWidth, setMarkupStrokeWidth] = useState(5);
   const [annotationDraft, setAnnotationDraft] = useState(null);
+  const [selectedAnnotationId, setSelectedAnnotationId] = useState(null);
   const markupCanvasRef = useRef(null);
   const isDrawingMarkupRef = useRef(false);
   const markupHistoryRef = useRef([]);
+  const markupRedoRef = useRef([]);
+  const markupStartPointRef = useRef(null);
+  const markupSnapshotRef = useRef(null);
   const annotationDragRef = useRef(null);
+  const markupPreviewUrl = markupImage?.previewUrl;
 
   // Accordion states when ZERO clashes are selected (Attachment 1 & 2)
   const [testDetailsOpen, setTestDetailsOpen] = useState(false);
@@ -562,9 +803,11 @@ const ClashTestDetail = () => {
   const [testSettingsTab, setTestSettingsTab] = useState('schedule');
   const [tsAutoRun, setTsAutoRun] = useState(true);
   const [tsFrequency, setTsFrequency] = useState('Weekly');
-  const [tsStartDate, setTsStartDate] = useState('');
+  const [tsStartDate, setTsStartDate] = useState(() => getRandomPastMonday());
   const [tsStartTime, setTsStartTime] = useState('09:00 AM');
   const [tsEndDate, setTsEndDate] = useState('');
+  const [tsStartDateAnchorEl, setTsStartDateAnchorEl] = useState(null);
+  const [tsEndDateAnchorEl, setTsEndDateAnchorEl] = useState(null);
   const [tsTagSearch, setTsTagSearch] = useState('');
   const [tsTagList, setTsTagList] = useState(TEST_SETTINGS_TAG_USAGE);
   const [tsTagMenuAnchorEl, setTsTagMenuAnchorEl] = useState(null);
@@ -575,6 +818,14 @@ const ClashTestDetail = () => {
   const [tsAutoClose, setTsAutoClose] = useState(true);
   const [tsDefaultClosedStatus, setTsDefaultClosedStatus] = useState('Closed');
   const [tsDefaultOpenStatus, setTsDefaultOpenStatus] = useState('Open');
+  const [viewerTool, setViewerTool] = useState('rotate');
+  const [viewerPoppedOut, setViewerPoppedOut] = useState(false);
+
+  const popOutViewer = () => setViewerPoppedOut(true);
+  const dockViewer = () => setViewerPoppedOut(false);
+  const [elementAVisible, setElementAVisible] = useState(true);
+  const [elementBVisible, setElementBVisible] = useState(true);
+  const [isolateNonClashing, setIsolateNonClashing] = useState(false);
 
   const handleOpenTestSettings = (e) => {
     setTestSettingsTab('schedule');
@@ -583,6 +834,38 @@ const ClashTestDetail = () => {
 
   const handleCloseTestSettings = () => {
     setTestSettingsAnchorEl(null);
+  };
+
+  const handleOpenTsStartDateCalendar = (e) => {
+    if (!tsAutoRun) return;
+    setTsStartDateAnchorEl(e.currentTarget);
+  };
+
+  const handleCloseTsStartDateCalendar = () => {
+    setTsStartDateAnchorEl(null);
+  };
+
+  const handleSelectTsStartDate = (value) => {
+    if (value) {
+      setTsStartDate(value.format('MM/DD/YYYY'));
+    }
+    setTsStartDateAnchorEl(null);
+  };
+
+  const handleOpenTsEndDateCalendar = (e) => {
+    if (!tsAutoRun) return;
+    setTsEndDateAnchorEl(e.currentTarget);
+  };
+
+  const handleCloseTsEndDateCalendar = () => {
+    setTsEndDateAnchorEl(null);
+  };
+
+  const handleSelectTsEndDate = (value) => {
+    if (value) {
+      setTsEndDate(value.format('MM/DD/YYYY'));
+    }
+    setTsEndDateAnchorEl(null);
   };
 
   const handleCreateTagFromSearch = () => {
@@ -638,6 +921,17 @@ const ClashTestDetail = () => {
   ];
 
   const mountRef = useRef(null);
+  const rendererRef = useRef(null);
+  const resizeViewportRef = useRef(null);
+  // Tracks the DOM node currently hosting the viewport. It is state (not just a
+  // ref) so relocating the canvas runs as an effect whenever the surface swaps
+  // between the docked panel and the expanded modal.
+  const [viewportNode, setViewportNode] = useState(null);
+  const setMountNode = useCallback((node) => {
+    if (!node) return;
+    mountRef.current = node;
+    setViewportNode(node);
+  }, []);
   const controlsRef = useRef(null);
   const highlightGroupRef = useRef(null);
   const targetCamPosRef = useRef(new THREE.Vector3());
@@ -646,9 +940,40 @@ const ClashTestDetail = () => {
   const bridgeRef = useRef(null);
   const cameraRef = useRef(null);
   const targetRef = useRef(null);
+  const clashMarkersGroupRef = useRef(null);
+  const viewerToolRef = useRef('rotate');
+  const clashesRef = useRef(clashes);
+  const selectedModelClashesRef = useRef([]);
+  const elementAVisibleRef = useRef(true);
+  const elementBVisibleRef = useRef(true);
+  const isolateNonClashingRef = useRef(false);
+
+  useEffect(() => {
+    clashesRef.current = clashes;
+  }, [clashes]);
+
+  useEffect(() => {
+    viewerToolRef.current = viewerTool;
+  }, [viewerTool]);
+
+  useEffect(() => {
+    elementAVisibleRef.current = elementAVisible;
+    applyViewerElementVisibility(highlightGroupRef.current, elementAVisible, elementBVisibleRef.current, isolateNonClashingRef.current);
+  }, [elementAVisible]);
+
+  useEffect(() => {
+    elementBVisibleRef.current = elementBVisible;
+    applyViewerElementVisibility(highlightGroupRef.current, elementAVisibleRef.current, elementBVisible, isolateNonClashingRef.current);
+  }, [elementBVisible]);
+
+  useEffect(() => {
+    isolateNonClashingRef.current = isolateNonClashing;
+    applyViewerElementVisibility(highlightGroupRef.current, elementAVisibleRef.current, elementBVisibleRef.current, isolateNonClashing);
+  }, [isolateNonClashing]);
 
   const primarySelectedClashId = selectedClashId || checkedIds[0] || null;
   const currentClash = primarySelectedClashId ? clashes.find((c) => c.id === primarySelectedClashId) || null : null;
+  const currentClashForms = currentClash ? getClashForms(currentClash) : [];
   const hasClashSelected = Boolean(selectedClashId && currentClash);
   const selectedModelClashes = useMemo(() => {
     const selectedIds = checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
@@ -659,6 +984,14 @@ const ClashTestDetail = () => {
   const hasModelSelection = selectedModelClashes.length > 0;
   const hasSelection = checkedIds.length > 0 || Boolean(selectedClashId);
   const selectedClashCount = checkedIds.length > 0 ? checkedIds.length : selectedClashId ? 1 : 0;
+
+  useEffect(() => {
+    selectedModelClashesRef.current = selectedModelClashes;
+    if (clashMarkersGroupRef.current) {
+      clashMarkersGroupRef.current.visible = selectedModelClashes.length === 0;
+    }
+  }, [selectedModelClashes]);
+
   const detailValues = useMemo(() => {
     const detailClashes = selectedModelClashes.length > 0 ? selectedModelClashes : currentClash ? [currentClash] : [];
     const getMixedValue = (getValue, fallback = '—') => {
@@ -766,7 +1099,7 @@ const ClashTestDetail = () => {
   };
 
   useEffect(() => {
-    if (!markupImage?.previewUrl || !markupCanvasRef.current) return;
+    if (!markupPreviewUrl || !markupCanvasRef.current) return;
     const canvas = markupCanvasRef.current;
     const context = canvas.getContext('2d');
     const image = new Image();
@@ -781,8 +1114,8 @@ const ClashTestDetail = () => {
       }
       markupHistoryRef.current = [];
     };
-    image.src = markupImage.previewUrl;
-  }, [markupImage]);
+    image.src = markupPreviewUrl;
+  }, [markupImage?.id, markupImage?.markupUrl, markupPreviewUrl]);
 
   const getMarkupPoint = (event) => {
     const canvas = markupCanvasRef.current;
@@ -794,6 +1127,7 @@ const ClashTestDetail = () => {
   };
 
   const startMarkup = (event) => {
+    if (markupTool === 'select') return;
     if (markupTool === 'text') {
       const canvas = markupCanvasRef.current;
       const bounds = canvas.getBoundingClientRect();
@@ -808,32 +1142,92 @@ const ClashTestDetail = () => {
     const canvas = markupCanvasRef.current;
     const context = canvas.getContext('2d');
     markupHistoryRef.current.push(canvas.toDataURL());
+    markupRedoRef.current = [];
     const point = getMarkupPoint(event);
+    markupStartPointRef.current = point;
+    markupSnapshotRef.current = context.getImageData(0, 0, canvas.width, canvas.height);
     context.beginPath();
     context.moveTo(point.x, point.y);
     context.strokeStyle = markupColor;
-    context.lineWidth = Math.max(4, canvas.width * 0.006);
+    context.lineWidth = Math.max(2, canvas.width * (markupStrokeWidth / 1000));
     context.lineCap = 'round';
     context.lineJoin = 'round';
     isDrawingMarkupRef.current = true;
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const restoreMarkupSnapshot = (snapshot, draw) => {
+    const canvas = markupCanvasRef.current;
+    const context = canvas.getContext('2d');
+    if (snapshot instanceof ImageData) {
+      context.putImageData(snapshot, 0, 0);
+      draw(context);
+      return;
+    }
+    const image = new Image();
+    image.onload = () => {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      draw(context);
+    };
+    image.src = snapshot;
   };
 
   const drawMarkup = (event) => {
     if (!isDrawingMarkupRef.current) return;
     const point = getMarkupPoint(event);
-    const context = markupCanvasRef.current.getContext('2d');
-    context.lineTo(point.x, point.y);
-    context.stroke();
+    const canvas = markupCanvasRef.current;
+    const start = markupStartPointRef.current;
+    if (markupTool === 'pen') {
+      const context = canvas.getContext('2d');
+      context.lineTo(point.x, point.y);
+      context.stroke();
+      return;
+    }
+
+    restoreMarkupSnapshot(markupSnapshotRef.current, (context) => {
+      const width = point.x - start.x;
+      const height = point.y - start.y;
+      context.strokeStyle = markupColor;
+      context.lineWidth = Math.max(2, canvas.width * (markupStrokeWidth / 1000));
+      context.lineCap = 'round';
+      context.lineJoin = 'round';
+      if (markupTool === 'rectangle') context.strokeRect(start.x, start.y, width, height);
+      if (markupTool === 'ellipse') {
+        context.beginPath();
+        context.ellipse(start.x + width / 2, start.y + height / 2, Math.abs(width / 2), Math.abs(height / 2), 0, 0, Math.PI * 2);
+        context.stroke();
+      }
+      if (markupTool === 'line' || markupTool === 'arrow') {
+        context.beginPath();
+        context.moveTo(start.x, start.y);
+        context.lineTo(point.x, point.y);
+        context.stroke();
+        if (markupTool === 'arrow') {
+          const angle = Math.atan2(height, width);
+          const headLength = Math.max(12, canvas.width * 0.018);
+          context.beginPath();
+          context.moveTo(point.x, point.y);
+          context.lineTo(point.x - headLength * Math.cos(angle - Math.PI / 6), point.y - headLength * Math.sin(angle - Math.PI / 6));
+          context.moveTo(point.x, point.y);
+          context.lineTo(point.x - headLength * Math.cos(angle + Math.PI / 6), point.y - headLength * Math.sin(angle + Math.PI / 6));
+          context.stroke();
+        }
+      }
+    });
   };
 
   const stopMarkup = () => {
     isDrawingMarkupRef.current = false;
+    markupStartPointRef.current = null;
+    markupSnapshotRef.current = null;
   };
 
   const undoMarkup = () => {
     const previous = markupHistoryRef.current.pop();
     if (!previous) return;
     const canvas = markupCanvasRef.current;
+    markupRedoRef.current.push(canvas.toDataURL());
     const context = canvas.getContext('2d');
     const image = new Image();
     image.onload = () => {
@@ -841,6 +1235,25 @@ const ClashTestDetail = () => {
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
     };
     image.src = previous;
+  };
+
+  const redoMarkup = () => {
+    const next = markupRedoRef.current.pop();
+    if (!next) return;
+    const canvas = markupCanvasRef.current;
+    markupHistoryRef.current.push(canvas.toDataURL());
+    restoreMarkupSnapshot(next, () => {});
+  };
+
+  const clearMarkup = () => {
+    const canvas = markupCanvasRef.current;
+    if (!canvas) return;
+    markupHistoryRef.current.push(canvas.toDataURL());
+    markupRedoRef.current = [];
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    setMarkupImage((image) => ({ ...image, annotations: [] }));
+    setAnnotationDraft(null);
+    setSelectedAnnotationId(null);
   };
 
   const saveMarkup = () => {
@@ -876,9 +1289,11 @@ const ClashTestDetail = () => {
   };
 
   const startAnnotationDrag = (event, annotation) => {
+    if (markupTool !== 'select') return;
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     annotationDragRef.current = { id: annotation.id };
+    setSelectedAnnotationId(annotation.id);
   };
 
   const moveAnnotation = (event) => {
@@ -899,6 +1314,15 @@ const ClashTestDetail = () => {
     annotationDragRef.current = null;
   };
 
+  const deleteSelectedAnnotation = () => {
+    if (!selectedAnnotationId) return;
+    setMarkupImage((image) => ({
+      ...image,
+      annotations: (image.annotations || []).filter((annotation) => annotation.id !== selectedAnnotationId),
+    }));
+    setSelectedAnnotationId(null);
+  };
+
   const captureModelView = () => {
     if (!currentClash || !controlsRef.current?.captureView) return;
     const capture = controlsRef.current.captureView();
@@ -909,8 +1333,9 @@ const ClashTestDetail = () => {
       annotations: [],
       isNewCapture: true,
     };
-    setMarkupTool('draw');
+    setMarkupTool('pen');
     setAnnotationDraft(null);
+    setSelectedAnnotationId(null);
     setMarkupImage(image);
   };
 
@@ -920,17 +1345,26 @@ const ClashTestDetail = () => {
     if (targetRows.length === 0) return;
 
     const sharedFormId = `FORM-${Date.now()}`;
+    const newForm = {
+      id: sharedFormId,
+      subject: subject || '',
+      status: formStatus || 'Open',
+      assignedTo: assignedTo || 'Jeanlouise Hornberger',
+      dueDate: dueDate || '',
+      comment: comment || '',
+    };
 
     setClashes((prev) =>
       prev.map((c) => {
         if (targetRows.includes(c.id)) {
           return {
             ...c,
-            subject: subject || '',
-            formStatus: formStatus || 'Open',
-            assignedTo: assignedTo || 'Jeanlouise Hornberger',
-            dueDate: dueDate || '',
-            comment: comment || '',
+            forms: [...getClashForms(c), newForm],
+            subject: newForm.subject,
+            formStatus: newForm.status,
+            assignedTo: newForm.assignedTo,
+            dueDate: newForm.dueDate,
+            comment: newForm.comment,
             hasForm: true,
             formId: sharedFormId,
           };
@@ -1266,10 +1700,13 @@ const ClashTestDetail = () => {
   // Embedded Interactive 3D Model Viewport (Replaces green block)
   // -------------------------------------------------------------
   useEffect(() => {
-    if (!mountRef.current) return;
-    const container = mountRef.current;
-    const width = container.clientWidth || 380;
-    const height = container.clientHeight || 280;
+    // The scene is built once per iModel and its canvas is later relocated
+    // between the docked panel and the expanded modal, so switching surfaces
+    // preserves camera position, zoom and highlight state exactly.
+    const hostWindow = window;
+    const initialContainer = mountRef.current;
+    const width = initialContainer?.clientWidth || 380;
+    const height = initialContainer?.clientHeight || 280;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a2428); // Clean dark engineering viewport background
@@ -1279,6 +1716,27 @@ const ClashTestDetail = () => {
     bridge.clashBeaconGroup.visible = false; // Superseded by dynamic dual-element highlight system
     scene.add(bridge.modelGroup);
     bridgeRef.current = bridge;
+
+    const clashMarkersGroup = new THREE.Group();
+    clashesRef.current.forEach((clash, index) => {
+      const clashParts = getStableClashParts(bridge.setAGroup, bridge.setBGroup, clash.id);
+      if (!clashParts) return;
+
+      const markerMaterial = new THREE.SpriteMaterial({
+        map: createClashMarkerTexture(index + 1),
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const marker = new THREE.Sprite(markerMaterial);
+      marker.position.copy(clashParts.position).add(new THREE.Vector3(0, 2.2, 0));
+      marker.scale.set(5.6, 2.1, 1);
+      marker.renderOrder = 10;
+      marker.userData.clash = clash;
+      clashMarkersGroup.add(marker);
+    });
+    scene.add(clashMarkersGroup);
+    clashMarkersGroupRef.current = clashMarkersGroup;
 
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.5, 500);
     camera.position.copy(bridge.defaultCameraPos);
@@ -1293,6 +1751,8 @@ const ClashTestDetail = () => {
     targetLookAtRef.current.copy(bridge.defaultTarget);
     isAnimatingCamRef.current = false;
 
+    clashMarkersGroup.visible = selectedModelClashesRef.current.length === 0;
+
     // Tracks temporary materials applied to the model during clash selection.
     const highlightGroup = new THREE.Group();
     scene.add(highlightGroup);
@@ -1300,10 +1760,12 @@ const ClashTestDetail = () => {
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(hostWindow.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+    // Attach immediately so rebuilding the scene (on an iModel switch) puts the
+    // new canvas into whichever surface is currently visible.
+    if (initialContainer) initialContainer.appendChild(renderer.domElement);
 
     // Lights - Warm golden hour sunlight highlighting Aztec Gold steel
     const ambLight = new THREE.AmbientLight(0xffffff, 0.9);
@@ -1340,7 +1802,7 @@ const ClashTestDetail = () => {
       const deltaY = e.clientY - prevMouse.y;
 
       if (isMouseDown) {
-        if (isPanning) {
+        if (isPanning || viewerToolRef.current === 'pan') {
           const forward = new THREE.Vector3();
           camera.getWorldDirection(forward);
           const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
@@ -1379,30 +1841,49 @@ const ClashTestDetail = () => {
       isAnimatingCamRef.current = false;
       const zoomDelta = e.deltaY * 0.025;
       const dir = camera.position.clone().sub(target);
-      const newLen = Math.max(5, Math.min(60, dir.length() + zoomDelta));
+      const newLen = Math.max(VIEWER_MIN_CAMERA_DISTANCE, Math.min(VIEWER_MAX_CAMERA_DISTANCE, dir.length() + zoomDelta));
       dir.setLength(newLen);
       camera.position.copy(target).add(dir);
       camera.lookAt(target);
     };
 
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const onClick = (e) => {
+      if (selectedModelClashesRef.current.length > 0 || !clashMarkersGroupRef.current?.visible) return;
+
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const [hit] = raycaster.intersectObjects(clashMarkersGroupRef.current.children, false);
+      const clash = hit?.object?.userData?.clash;
+      if (!clash) return;
+
+      setSelectedClashId(clash.id);
+      setCheckedIds([clash.id]);
+    };
+
     const dom = renderer.domElement;
     dom.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    hostWindow.addEventListener('mousemove', onMouseMove);
+    hostWindow.addEventListener('mouseup', onMouseUp);
     dom.addEventListener('wheel', onWheel, { passive: false });
+    dom.addEventListener('click', onClick);
     dom.addEventListener('contextmenu', (e) => e.preventDefault());
 
     controlsRef.current = {
       zoomIn: () => {
         isAnimatingCamRef.current = false;
         const dir = camera.position.clone().sub(target);
-        dir.setLength(Math.max(5, dir.length() - 4));
+        dir.setLength(Math.max(VIEWER_MIN_CAMERA_DISTANCE, dir.length() - 4));
         camera.position.copy(target).add(dir);
       },
       zoomOut: () => {
         isAnimatingCamRef.current = false;
         const dir = camera.position.clone().sub(target);
-        dir.setLength(Math.min(60, dir.length() + 4));
+        dir.setLength(Math.min(VIEWER_MAX_CAMERA_DISTANCE, dir.length() + 4));
         camera.position.copy(target).add(dir);
       },
       resetView: () => {
@@ -1451,26 +1932,59 @@ const ClashTestDetail = () => {
     animate();
 
     const handleResize = () => {
-      if (!container) return;
-      const w = container.clientWidth;
-      const h = container.clientHeight;
+      const activeContainer = mountRef.current;
+      if (!activeContainer) return;
+      const w = activeContainer.clientWidth;
+      const h = activeContainer.clientHeight;
+      if (w === 0 || h === 0) return;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
-    window.addEventListener('resize', handleResize);
+    resizeViewportRef.current = handleResize;
+    hostWindow.addEventListener('resize', handleResize);
 
     return () => {
       cancelAnimationFrame(animId);
       clearModelSelection(highlightGroup);
-      window.removeEventListener('resize', handleResize);
+      clashMarkersGroup.traverse((object) => {
+        if (object.material?.map) object.material.map.dispose();
+        if (object.material) object.material.dispose();
+      });
+      if (clashMarkersGroupRef.current === clashMarkersGroup) {
+        clashMarkersGroupRef.current = null;
+      }
+      hostWindow.removeEventListener('resize', handleResize);
+      resizeViewportRef.current = null;
+      if (rendererRef.current === renderer) rendererRef.current = null;
       dom.removeEventListener('mousedown', onMouseDown);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+      hostWindow.removeEventListener('mousemove', onMouseMove);
+      hostWindow.removeEventListener('mouseup', onMouseUp);
       dom.removeEventListener('wheel', onWheel);
+      dom.removeEventListener('click', onClick);
+      dom.remove();
       renderer.dispose();
     };
   }, [testData.iModel]);
+
+  // Move the existing canvas into whichever surface is currently showing the
+  // viewport. Relocating the same renderer (instead of rebuilding the scene)
+  // is what makes the expanded modal look and behave exactly like the mini
+  // viewer, preserving camera angle, zoom and any active clash highlight.
+  useEffect(() => {
+    const container = viewportNode;
+    const renderer = rendererRef.current;
+    if (!container || !renderer) return undefined;
+
+    if (renderer.domElement.parentNode !== container) {
+      container.appendChild(renderer.domElement);
+    }
+    resizeViewportRef.current?.();
+
+    const resizeObserver = new ResizeObserver(() => resizeViewportRef.current?.());
+    resizeObserver.observe(container);
+    return () => resizeObserver.disconnect();
+  }, [viewportNode, viewerPoppedOut]);
 
   // -------------------------------------------------------------
   // Focus the model's real clash location and highlight two model parts
@@ -1517,6 +2031,12 @@ const ClashTestDetail = () => {
       });
 
       highlightGroupRef.current.userData.highlightedMeshes = highlightedMeshes;
+      applyViewerElementVisibility(
+        highlightGroupRef.current,
+        elementAVisibleRef.current,
+        elementBVisibleRef.current,
+        isolateNonClashingRef.current
+      );
 
       const selectionCenter = selectionBounds.getCenter(new THREE.Vector3());
       const selectionRadius = Math.max(
@@ -2316,9 +2836,13 @@ const ClashTestDetail = () => {
             overflow: 'hidden',
           }}
         >
-          {/* Top Interactive 3D Model Viewport (Replaces green block) */}
-          <Box sx={{ position: 'relative', width: '100%', height: 280, backgroundColor: '#1a2428', borderBottom: '1px solid #e0e4e6', overflow: 'hidden' }}>
-            <div ref={mountRef} style={{ width: '100%', height: '100%', overflow: 'hidden' }} />
+          {/* Top Interactive 3D Model Viewport — docked here, or popped out full screen */}
+          <ViewerSurface
+            poppedOut={viewerPoppedOut}
+            onDock={dockViewer}
+            iModelName={testData.iModel || '3D Model'}
+          >
+            <div ref={setMountNode} style={{ width: '100%', height: '100%', overflow: 'hidden' }} />
 
             {/* Floating 3D overlay controls */}
             <Box sx={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexDirection: 'column', gap: 0.5, pointerEvents: 'none', maxWidth: '85%' }}>
@@ -2388,46 +2912,215 @@ const ClashTestDetail = () => {
               )}
             </Box>
 
-            <Paper
-              elevation={2}
+            <Box
               sx={{
                 position: 'absolute',
-                bottom: 10,
-                right: 10,
-                backgroundColor: 'rgba(20, 26, 30, 0.9)',
-                backdropFilter: 'blur(4px)',
-                border: '1px solid #2f3c44',
-                borderRadius: 1,
+                top: 12,
+                right: 12,
                 display: 'flex',
+                flexDirection: 'column',
                 alignItems: 'center',
-                p: 0.3,
-                gap: 0.2,
+                gap: 1,
+                zIndex: 2,
               }}
             >
-              <Tooltip title="Zoom in">
-                <IconButton size="small" onClick={() => controlsRef.current?.zoomIn()} sx={{ color: '#fff', p: 0.5 }}>
-                  <ZoomInIcon sx={{ fontSize: 16 }} />
-                </IconButton>
+              <Tooltip title={viewerPoppedOut ? 'Dock iModel back into panel' : 'Expand iModel viewer'} placement="left">
+                <Paper
+                  elevation={0}
+                  component={IconButton}
+                  size="small"
+                  aria-label={viewerPoppedOut ? 'Dock iModel' : 'Expand iModel viewer'}
+                  onClick={() => (viewerPoppedOut ? dockViewer() : popOutViewer())}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 2,
+                    backgroundColor: 'rgba(255,255,255,0.78)',
+                    backdropFilter: 'blur(5px)',
+                    border: '1px solid rgba(122, 134, 142, 0.36)',
+                    color: '#59656d',
+                    boxShadow: '0 6px 16px rgba(0,0,0,0.16)',
+                    '&:hover': { backgroundColor: 'rgba(255,255,255,0.92)' },
+                  }}
+                >
+                  {viewerPoppedOut ? <OpenInNewOffOutlinedIcon sx={{ fontSize: 18 }} /> : <LaunchIcon sx={{ fontSize: 18 }} />}
+                </Paper>
               </Tooltip>
-              <Tooltip title="Zoom out">
-                <IconButton size="small" onClick={() => controlsRef.current?.zoomOut()} sx={{ color: '#fff', p: 0.5 }}>
-                  <ZoomOutIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Reset view">
-                <IconButton size="small" onClick={() => controlsRef.current?.resetView()} sx={{ color: '#fff', p: 0.5 }}>
-                  <CenterFocusStrongIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title={hasClashSelected ? 'Capture view and add to clash images' : 'Select a clash to capture this view'}>
-                <span>
-                  <IconButton size="small" disabled={!hasClashSelected} onClick={captureModelView} sx={{ color: '#fff', p: 0.5, '&.Mui-disabled': { color: '#657075' } }}>
-                    <CameraAltOutlinedIcon sx={{ fontSize: 16 }} />
+
+              <Paper
+                elevation={0}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  backgroundColor: 'rgba(255,255,255,0.76)',
+                  backdropFilter: 'blur(5px)',
+                  border: '1px solid rgba(122, 134, 142, 0.36)',
+                  borderRadius: 2,
+                  p: 0.55,
+                  gap: 0.25,
+                  boxShadow: '0 6px 16px rgba(0,0,0,0.16)',
+                }}
+              >
+                <Tooltip title="Pan view" placement="left">
+                  <IconButton
+                    size="small"
+                    onClick={() => setViewerTool('pan')}
+                    sx={{
+                      color: viewerTool === 'pan' ? '#087f6c' : '#59656d',
+                      width: 30,
+                      height: 30,
+                      borderRadius: 1,
+                      backgroundColor: viewerTool === 'pan' ? 'rgba(8, 127, 108, 0.12)' : 'transparent',
+                      '&:hover': { backgroundColor: viewerTool === 'pan' ? 'rgba(8, 127, 108, 0.16)' : 'rgba(0,0,0,0.05)' },
+                    }}
+                  >
+                    <PanToolOutlinedIcon sx={{ fontSize: 17 }} />
                   </IconButton>
-                </span>
-              </Tooltip>
-            </Paper>
-          </Box>
+                </Tooltip>
+                <Tooltip title="Fit selection to window" placement="left">
+                  <IconButton size="small" onClick={() => controlsRef.current?.resetView()} sx={{ color: '#59656d', width: 30, height: 30, borderRadius: 1, '&:hover': { backgroundColor: 'rgba(0,0,0,0.05)' } }}>
+                    <CenterFocusStrongIcon sx={{ fontSize: 17 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Rotate view" placement="left">
+                  <IconButton
+                    size="small"
+                    onClick={() => setViewerTool('rotate')}
+                    sx={{
+                      color: viewerTool === 'rotate' ? '#087f6c' : '#59656d',
+                      width: 30,
+                      height: 30,
+                      borderRadius: 1,
+                      backgroundColor: viewerTool === 'rotate' ? 'rgba(8, 127, 108, 0.12)' : 'transparent',
+                      '&:hover': { backgroundColor: viewerTool === 'rotate' ? 'rgba(8, 127, 108, 0.16)' : 'rgba(0,0,0,0.05)' },
+                    }}
+                  >
+                    <RotateRightOutlinedIcon sx={{ fontSize: 17 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Zoom in" placement="left">
+                  <IconButton size="small" onClick={() => controlsRef.current?.zoomIn()} sx={{ color: '#59656d', width: 30, height: 30, borderRadius: 1, '&:hover': { backgroundColor: 'rgba(0,0,0,0.05)' } }}>
+                    <ZoomInIcon sx={{ fontSize: 17 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Zoom out" placement="left">
+                  <IconButton size="small" onClick={() => controlsRef.current?.zoomOut()} sx={{ color: '#59656d', width: 30, height: 30, borderRadius: 1, '&:hover': { backgroundColor: 'rgba(0,0,0,0.05)' } }}>
+                    <ZoomOutIcon sx={{ fontSize: 17 }} />
+                  </IconButton>
+                </Tooltip>
+
+                <Divider flexItem sx={{ my: 0.65, borderColor: 'rgba(105, 117, 126, 0.28)' }} />
+
+                <Tooltip title="Turn markers on/off" placement="left">
+                  <IconButton size="small" sx={{ color: '#1c1f21', width: 30, height: 30, borderRadius: 1, '&:hover': { backgroundColor: 'rgba(0,0,0,0.05)' } }}>
+                    <LocationOnOutlinedIcon sx={{ fontSize: 20 }} />
+                  </IconButton>
+                </Tooltip>
+
+                <Tooltip title={elementAVisible ? 'Hide Element A' : 'Show Element A'} placement="left">
+                  <Box
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setElementAVisible((visible) => !visible)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setElementAVisible((visible) => !visible);
+                      }
+                    }}
+                    sx={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: elementAVisible ? '#e0364f' : 'rgba(224, 54, 79, 0.12)',
+                      color: elementAVisible ? '#fff' : '#e0364f',
+                      fontWeight: 700,
+                      fontSize: 13,
+                      boxShadow: elementAVisible ? '0 4px 10px rgba(224, 54, 79, 0.28)' : 'none',
+                      border: elementAVisible ? 'none' : '1px solid rgba(224, 54, 79, 0.45)',
+                      opacity: elementAVisible ? 1 : 0.62,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      '&:hover': {
+                        opacity: 1,
+                        backgroundColor: elementAVisible ? '#c92d44' : 'rgba(224, 54, 79, 0.18)',
+                      },
+                    }}
+                  >
+                    A
+                  </Box>
+                </Tooltip>
+                <Tooltip title={elementBVisible ? 'Hide Element B' : 'Show Element B'} placement="left">
+                  <Box
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setElementBVisible((visible) => !visible)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setElementBVisible((visible) => !visible);
+                      }
+                    }}
+                    sx={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: elementBVisible ? '#2f6fed' : 'rgba(47, 111, 237, 0.12)',
+                      color: elementBVisible ? '#fff' : '#2f6fed',
+                      fontWeight: 700,
+                      fontSize: 13,
+                      boxShadow: elementBVisible ? '0 4px 10px rgba(47, 111, 237, 0.24)' : 'none',
+                      border: elementBVisible ? 'none' : '1px solid rgba(47, 111, 237, 0.45)',
+                      opacity: elementBVisible ? 1 : 0.62,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      '&:hover': {
+                        opacity: 1,
+                        backgroundColor: elementBVisible ? '#255fd4' : 'rgba(47, 111, 237, 0.18)',
+                      },
+                    }}
+                  >
+                    B
+                  </Box>
+                </Tooltip>
+
+                <Tooltip title={isolateNonClashing ? 'Show non-clashing elements' : 'Isolate clash elements'} placement="left">
+                  <IconButton
+                    size="small"
+                    onClick={() => setIsolateNonClashing((active) => !active)}
+                    sx={{
+                      color: isolateNonClashing ? '#087f6c' : '#59656d',
+                      width: 30,
+                      height: 30,
+                      borderRadius: 1,
+                      backgroundColor: isolateNonClashing ? 'rgba(8, 127, 108, 0.12)' : 'transparent',
+                      '&:hover': {
+                        backgroundColor: isolateNonClashing ? 'rgba(8, 127, 108, 0.16)' : 'rgba(0,0,0,0.05)',
+                      },
+                    }}
+                  >
+                    <IsolateElementsIcon sx={{ fontSize: 19 }} />
+                  </IconButton>
+                </Tooltip>
+
+                <Divider flexItem sx={{ my: 0.65, borderColor: 'rgba(105, 117, 126, 0.28)' }} />
+                <Tooltip title={hasClashSelected ? 'Capture view and add to clash images' : 'Select a clash to capture this view'} placement="left">
+                  <span>
+                    <IconButton size="small" disabled={!hasClashSelected} onClick={captureModelView} sx={{ color: '#59656d', width: 30, height: 30, borderRadius: 1, '&:hover': { backgroundColor: 'rgba(0,0,0,0.05)' }, '&.Mui-disabled': { color: '#a7b0b6' } }}>
+                      <CameraAltOutlinedIcon sx={{ fontSize: 17 }} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Paper>
+            </Box>
+          </ViewerSurface>
 
           {/* Details Accordion Panel */}
           <Box sx={{ flex: 1, overflowY: 'auto' }}>
@@ -2560,45 +3253,49 @@ const ClashTestDetail = () => {
                     }}
                   >
                     <Typography sx={{ fontWeight: 600, fontSize: 14, color: '#1c1f21' }}>
-                      Forms ({currentClash.hasForm || currentClash.formStatus ? 1 : 0})
+                      Forms ({currentClashForms.length})
                     </Typography>
                     {clashFormsOpen ? <KeyboardArrowUpIcon sx={{ fontSize: 18, color: '#536066' }} /> : <KeyboardArrowDownIcon sx={{ fontSize: 18, color: '#536066' }} />}
                   </Box>
                   <Collapse in={clashFormsOpen}>
                     <Box sx={{ px: 2.5, pb: 2, pt: 0.5 }}>
-                      {currentClash.hasForm || currentClash.formStatus ? (
-                        <Box sx={{ p: 1.5, backgroundColor: '#f8fafb', borderRadius: '4px', border: '1px solid #e0e4e6' }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
-                            <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                              {currentClash.subject || currentClash.formId || `FORM-${currentClash.id}`}
-                            </Typography>
-                            <Chip
-                              label={currentClash.formStatus || 'Open'}
-                              size="small"
-                              sx={{
-                                height: 20,
-                                fontSize: 11,
-                                fontWeight: 600,
-                                backgroundColor: '#e6f4ea',
-                                color: '#137333',
-                              }}
-                            />
-                          </Box>
-                          {currentClash.assignedTo && (
-                            <Typography sx={{ fontSize: 12, color: '#536066', mb: 0.5 }}>
-                              <span style={{ fontWeight: 500, color: '#1c1f21' }}>Assigned to:</span> {currentClash.assignedTo}
-                            </Typography>
-                          )}
-                          {currentClash.dueDate && (
-                            <Typography sx={{ fontSize: 12, color: '#536066', mb: 0.5 }}>
-                              <span style={{ fontWeight: 500, color: '#1c1f21' }}>Due date:</span> {currentClash.dueDate}
-                            </Typography>
-                          )}
-                          {currentClash.comment && (
-                            <Typography sx={{ fontSize: 12, color: '#657075', mt: 0.5, fontStyle: 'italic' }}>
-                              "{currentClash.comment}"
-                            </Typography>
-                          )}
+                      {currentClashForms.length > 0 ? (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          {currentClashForms.map((form) => (
+                            <Box key={form.id} sx={{ p: 1.5, backgroundColor: '#f8fafb', borderRadius: '4px', border: '1px solid #e0e4e6' }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+                                <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
+                                  {form.subject || form.id}
+                                </Typography>
+                                <Chip
+                                  label={form.status || 'Open'}
+                                  size="small"
+                                  sx={{
+                                    height: 20,
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    backgroundColor: '#e6f4ea',
+                                    color: '#137333',
+                                  }}
+                                />
+                              </Box>
+                              {form.assignedTo && (
+                                <Typography sx={{ fontSize: 12, color: '#536066', mb: 0.5 }}>
+                                  <span style={{ fontWeight: 500, color: '#1c1f21' }}>Assigned to:</span> {form.assignedTo}
+                                </Typography>
+                              )}
+                              {form.dueDate && (
+                                <Typography sx={{ fontSize: 12, color: '#536066', mb: 0.5 }}>
+                                  <span style={{ fontWeight: 500, color: '#1c1f21' }}>Due date:</span> {form.dueDate}
+                                </Typography>
+                              )}
+                              {form.comment && (
+                                <Typography sx={{ fontSize: 12, color: '#657075', mt: 0.5, fontStyle: 'italic' }}>
+                                  "{form.comment}"
+                                </Typography>
+                              )}
+                            </Box>
+                          ))}
                         </Box>
                       ) : (
                         <Box sx={{ minHeight: 160, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, textAlign: 'center' }}>
@@ -3221,11 +3918,18 @@ const ClashTestDetail = () => {
                       placeholder="MM/DD/YYYY"
                       value={tsStartDate}
                       onChange={(e) => setTsStartDate(e.target.value)}
-                      disabled={!tsAutoRun}
+                      disabled
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <CalendarTodayOutlinedIcon sx={{ fontSize: 16, color: '#8a9296' }} />
+                            <IconButton
+                              size="small"
+                              onClick={handleOpenTsStartDateCalendar}
+                              disabled
+                              sx={{ p: 0.25, '&:hover': { backgroundColor: 'transparent' } }}
+                            >
+                              <CalendarTodayOutlinedIcon sx={{ fontSize: 16, color: '#8a9296' }} />
+                            </IconButton>
                           </InputAdornment>
                         ),
                       }}
@@ -3238,6 +3942,30 @@ const ClashTestDetail = () => {
                         },
                       }}
                     />
+                    <Popover
+                      open={Boolean(tsStartDateAnchorEl)}
+                      anchorEl={tsStartDateAnchorEl}
+                      onClose={handleCloseTsStartDateCalendar}
+                      anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                      transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                      slotProps={{
+                        paper: {
+                          sx: {
+                            borderRadius: '6px',
+                            border: '1px solid #c2c9cd',
+                            boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+                            mt: 0.5,
+                          },
+                        },
+                      }}
+                    >
+                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <DateCalendar
+                          value={tsStartDate ? dayjs(tsStartDate, 'MM/DD/YYYY') : null}
+                          onChange={handleSelectTsStartDate}
+                        />
+                      </LocalizationProvider>
+                    </Popover>
                   </Box>
 
                   <Box>
@@ -3281,7 +4009,14 @@ const ClashTestDetail = () => {
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <CalendarTodayOutlinedIcon sx={{ fontSize: 16, color: '#8a9296' }} />
+                            <IconButton
+                              size="small"
+                              onClick={handleOpenTsEndDateCalendar}
+                              disabled={!tsAutoRun}
+                              sx={{ p: 0.25, '&:hover': { backgroundColor: 'transparent' } }}
+                            >
+                              <CalendarTodayOutlinedIcon sx={{ fontSize: 16, color: '#8a9296' }} />
+                            </IconButton>
                           </InputAdornment>
                         ),
                       }}
@@ -3294,6 +4029,31 @@ const ClashTestDetail = () => {
                         },
                       }}
                     />
+                    <Popover
+                      open={Boolean(tsEndDateAnchorEl)}
+                      anchorEl={tsEndDateAnchorEl}
+                      onClose={handleCloseTsEndDateCalendar}
+                      anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                      transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                      slotProps={{
+                        paper: {
+                          sx: {
+                            borderRadius: '6px',
+                            border: '1px solid #c2c9cd',
+                            boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+                            mt: 0.5,
+                          },
+                        },
+                      }}
+                    >
+                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                        <DateCalendar
+                          value={tsEndDate ? dayjs(tsEndDate, 'MM/DD/YYYY') : null}
+                          onChange={handleSelectTsEndDate}
+                          disablePast
+                        />
+                      </LocalizationProvider>
+                    </Popover>
                   </Box>
                 </Box>
               )}
@@ -3746,20 +4506,65 @@ const ClashTestDetail = () => {
             <Typography sx={{ fontSize: 20, fontWeight: 500 }}>Mark up image</Typography>
             <Typography sx={{ fontSize: 12, color: '#657075', mt: 0.25 }}>{markupImage?.file.name}</Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}>
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <ButtonGroup size="small" aria-label="Markup tools">
+              {[
+                { value: 'select', label: 'Select annotations', icon: <PanToolOutlinedIcon fontSize="small" /> },
+                { value: 'pen', label: 'Draw freehand', icon: <GestureIcon fontSize="small" /> },
+                { value: 'line', label: 'Draw line', icon: <RemoveIcon fontSize="small" /> },
+                { value: 'arrow', label: 'Draw arrow', icon: <ArrowForwardIcon fontSize="small" /> },
+                { value: 'rectangle', label: 'Draw rectangle', icon: <CropSquareIcon fontSize="small" /> },
+                { value: 'ellipse', label: 'Draw ellipse', icon: <RadioButtonUncheckedIcon fontSize="small" /> },
+                { value: 'text', label: 'Add text', icon: <TextFieldsIcon fontSize="small" /> },
+              ].map((tool) => (
+                <Tooltip key={tool.value} title={tool.label}>
+                  <Button
+                    aria-label={tool.label}
+                    onClick={() => { setMarkupTool(tool.value); setAnnotationDraft(null); }}
+                    sx={{
+                      minWidth: 34,
+                      px: 0.75,
+                      color: markupTool === tool.value ? '#087f6c' : '#536066',
+                      bgcolor: markupTool === tool.value ? '#e3f2ef' : '#fff',
+                      '&:hover': { bgcolor: markupTool === tool.value ? '#d2eae3' : '#f3f6f7' },
+                    }}
+                  >
+                    {tool.icon}
+                  </Button>
+                </Tooltip>
+              ))}
+            </ButtonGroup>
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
             {['#d32f2f', '#1976d2', '#f9a825'].map((color) => (
               <IconButton key={color} onClick={() => setMarkupColor(color)} aria-label={`Use ${color} markup`} sx={{ p: 0.35, border: markupColor === color ? '2px solid #1c1f21' : '2px solid transparent' }}>
                 <Box sx={{ width: 18, height: 18, borderRadius: '50%', bgcolor: color }} />
               </IconButton>
             ))}
-            <Button
-              startIcon={<TextFieldsIcon />}
-              onClick={() => setMarkupTool((tool) => (tool === 'text' ? 'draw' : 'text'))}
-              sx={{ textTransform: 'none', color: markupTool === 'text' ? '#087f6c' : '#344046', fontWeight: markupTool === 'text' ? 700 : 500 }}
-            >
-              Text
-            </Button>
-            <Button startIcon={<UndoIcon />} onClick={undoMarkup} sx={{ textTransform: 'none', color: '#344046' }}>Undo</Button>
+            <Tooltip title="Stroke width">
+              <Box sx={{ width: 72, display: 'flex', alignItems: 'center', px: 0.5 }}>
+                <Slider
+                  aria-label="Stroke width"
+                  value={markupStrokeWidth}
+                  min={2}
+                  max={12}
+                  onChange={(event, value) => setMarkupStrokeWidth(value)}
+                  size="small"
+                  sx={{ color: '#087f6c' }}
+                />
+              </Box>
+            </Tooltip>
+            <Tooltip title="Undo">
+              <IconButton aria-label="Undo markup" size="small" onClick={undoMarkup}><UndoIcon fontSize="small" /></IconButton>
+            </Tooltip>
+            <Tooltip title="Redo">
+              <IconButton aria-label="Redo markup" size="small" onClick={redoMarkup}><RedoIcon fontSize="small" /></IconButton>
+            </Tooltip>
+            <Tooltip title="Delete selected annotation">
+              <IconButton aria-label="Delete selected annotation" size="small" onClick={deleteSelectedAnnotation} disabled={!selectedAnnotationId}><DeleteOutlineIcon fontSize="small" /></IconButton>
+            </Tooltip>
+            <Tooltip title="Clear all markups">
+              <IconButton aria-label="Clear all markups" size="small" onClick={clearMarkup}><ClearIcon fontSize="small" /></IconButton>
+            </Tooltip>
           </Box>
         </DialogTitle>
         <DialogContent dividers sx={{ bgcolor: '#344046', display: 'flex', justifyContent: 'center', py: 2 }}>
@@ -3773,7 +4578,7 @@ const ClashTestDetail = () => {
                 onPointerMove={drawMarkup}
                 onPointerUp={stopMarkup}
                 onPointerLeave={stopMarkup}
-                sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: markupTool === 'text' ? 'text' : 'crosshair', touchAction: 'none' }}
+                sx={{ position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: markupTool === 'text' ? 'text' : markupTool === 'select' ? 'default' : 'crosshair', touchAction: 'none' }}
               />
               {(markupImage.annotations || []).map((annotation) => (
                 <Box
@@ -3793,8 +4598,9 @@ const ClashTestDetail = () => {
                     maxWidth: 180,
                     px: 0.75,
                     py: 0.45,
-                    cursor: 'grab',
+                    cursor: markupTool === 'select' ? 'grab' : 'default',
                     userSelect: 'none',
+                    boxShadow: selectedAnnotationId === annotation.id ? `0 0 0 2px ${annotation.color}` : 'none',
                   }}
                   onPointerDown={(event) => startAnnotationDrag(event, annotation)}
                   onPointerMove={moveAnnotation}

@@ -3,22 +3,19 @@ import * as THREE from 'three';
 import {
   Dialog,
   Box,
-  Typography,
   IconButton,
   Paper,
   Tooltip,
-  Divider,
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import LaunchIcon from '@mui/icons-material/Launch';
-import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
 import RotateRightOutlinedIcon from '@mui/icons-material/RotateRightOutlined';
 import FitScreenOutlinedIcon from '@mui/icons-material/FitScreenOutlined';
-import NearMeOutlinedIcon from '@mui/icons-material/NearMeOutlined';
-import StraightenOutlinedIcon from '@mui/icons-material/StraightenOutlined';
-import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import ZoomInOutlinedIcon from '@mui/icons-material/ZoomInOutlined';
+import ZoomOutOutlinedIcon from '@mui/icons-material/ZoomOutOutlined';
+import CameraAltOutlinedIcon from '@mui/icons-material/CameraAltOutlined';
+import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { getModelForIModel } from '../utils/pittsburghModels';
 
 const IModelQuickViewModal = ({
@@ -160,6 +157,23 @@ const IModelQuickViewModal = ({
         camera.position.copy(bridge.defaultCameraPos);
         camera.lookAt(target);
       },
+      zoomIn: () => {
+        const dir = camera.position.clone().sub(target);
+        dir.setLength(Math.max(6, dir.length() - 5));
+        camera.position.copy(target).add(dir);
+        camera.lookAt(target);
+      },
+      zoomOut: () => {
+        const dir = camera.position.clone().sub(target);
+        dir.setLength(Math.min(80, dir.length() + 5));
+        camera.position.copy(target).add(dir);
+        camera.lookAt(target);
+      },
+      setCameraView: () => {
+        target.copy(bridge.defaultTarget);
+        camera.position.copy(bridge.defaultCameraPos);
+        camera.lookAt(target);
+      },
     };
 
     // Render loop
@@ -200,7 +214,7 @@ const IModelQuickViewModal = ({
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="lg"
+      maxWidth="xl"
       fullWidth
       TransitionProps={{
         onEntered: () => setViewerReadyKey((key) => key + 1),
@@ -215,39 +229,9 @@ const IModelQuickViewModal = ({
         },
       }}
     >
-      {/* Popover Header Bar */}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          px: 2.5,
-          py: 1.5,
-          borderBottom: '1px solid #f0f2f4',
-        }}
-      >
-        <Typography sx={{ fontWeight: 600, fontSize: 16, color: '#1c1f21' }}>
-          iModel quick view
-        </Typography>
-
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <IconButton size="small" sx={{ border: '1px solid #c2c9cd', borderRadius: 1, p: 0.5, color: '#657075' }}>
-            <HelpOutlineIcon sx={{ fontSize: 18 }} />
-          </IconButton>
-          <IconButton size="small" sx={{ border: '1px solid #c2c9cd', borderRadius: 1, p: 0.5, color: '#657075' }}>
-            <LaunchIcon sx={{ fontSize: 18 }} />
-          </IconButton>
-          <IconButton onClick={onClose} size="small" sx={{ border: '1px solid #c2c9cd', borderRadius: 1, p: 0.5, color: '#657075' }}>
-            <CloseIcon sx={{ fontSize: 18 }} />
-          </IconButton>
-        </Box>
-      </Box>
-
-      {/* 3D Canvas Container */}
-      <Box sx={{ position: 'relative', width: '100%', height: 560, backgroundColor: '#e6edf2' }}>
+      <Box sx={{ position: 'relative', width: '100%', height: 560, backgroundColor: '#e6edf2', minWidth: 0 }}>
         <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
 
-        {/* Top-Right Pill Controls: Layers, Set A, Set B, Detach */}
         <Paper
           elevation={2}
           sx={{
@@ -255,44 +239,131 @@ const IModelQuickViewModal = ({
             top: 16,
             right: 16,
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             borderRadius: 2,
-            p: 0.4,
+            p: 0.5,
             backgroundColor: '#ffffff',
             border: '1px solid #d0d7dc',
+            boxShadow: '0 8px 22px rgba(0,0,0,0.10)',
             gap: 0.5,
+            zIndex: 2,
           }}
         >
-          <Tooltip title="All elements">
-            <IconButton
-              size="small"
-              onClick={() => setActiveSetFilter('all')}
-              sx={{
-                p: 0.6,
-                backgroundColor: activeSetFilter === 'all' ? '#eef4f8' : 'transparent',
-                color: '#495760',
-              }}
-            >
-              <LayersOutlinedIcon sx={{ fontSize: 20 }} />
+          <Tooltip title="Pop out viewer" placement="left">
+            <IconButton size="small" onClick={onClose} sx={{ p: 0.7, color: '#656f78' }}>
+              <LaunchIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Tooltip>
 
+          <Tooltip title="Pan tool" placement="left">
+            <IconButton
+              size="small"
+              onClick={() => setActiveTool('pan')}
+              sx={{
+                p: 0.7,
+                backgroundColor: activeTool === 'pan' ? '#edf4f8' : 'transparent',
+                color: activeTool === 'pan' ? '#087f6c' : '#5f6d76',
+              }}
+            >
+              <PanToolOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Fit view" placement="left">
+            <IconButton
+              size="small"
+              onClick={() => controlsRef.current?.resetView()}
+              sx={{ p: 0.7, color: '#5f6d76' }}
+            >
+              <FitScreenOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Orbit / Rotate" placement="left">
+            <IconButton
+              size="small"
+              onClick={() => setActiveTool('rotate')}
+              sx={{
+                p: 0.7,
+                backgroundColor: activeTool === 'rotate' ? '#edf4f8' : 'transparent',
+                color: activeTool === 'rotate' ? '#087f6c' : '#5f6d76',
+              }}
+            >
+              <RotateRightOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Zoom in" placement="left">
+            <IconButton size="small" onClick={() => controlsRef.current?.zoomIn()} sx={{ p: 0.7, color: '#5f6d76' }}>
+              <ZoomInOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Zoom out" placement="left">
+            <IconButton size="small" onClick={() => controlsRef.current?.zoomOut()} sx={{ p: 0.7, color: '#5f6d76' }}>
+              <ZoomOutOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Camera view" placement="left">
+            <IconButton
+              size="small"
+              onClick={() => {
+                setActiveTool('camera');
+                controlsRef.current?.setCameraView();
+              }}
+              sx={{
+                p: 0.7,
+                backgroundColor: activeTool === 'camera' ? '#edf4f8' : 'transparent',
+                color: activeTool === 'camera' ? '#087f6c' : '#5f6d76',
+              }}
+            >
+              <CameraAltOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Search elements" placement="left">
+            <IconButton size="small" sx={{ p: 0.7, color: '#5f6d76' }}>
+              <SearchOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Hide/show elements" placement="left">
+            <IconButton size="small" sx={{ p: 0.7, color: '#5f6d76' }}>
+              <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </Tooltip>
+        </Paper>
+
+        <Box
+          sx={{
+            position: 'absolute',
+            right: 18,
+            bottom: 20,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.7,
+            zIndex: 2,
+          }}
+        >
           <Tooltip title="Isolate Set A">
             <Box
               onClick={() => setActiveSetFilter(activeSetFilter === 'A' ? 'all' : 'A')}
               sx={{
-                width: 26,
-                height: 26,
-                borderRadius: '50%',
-                backgroundColor: activeSetFilter === 'A' ? '#1976d2' : '#576774',
-                color: '#fff',
+                width: 30,
+                height: 30,
+                borderRadius: '8px',
+                backgroundColor: activeSetFilter === 'A' ? '#1976d2' : '#dfeaf3',
+                color: activeSetFilter === 'A' ? '#fff' : '#2d6ee8',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontWeight: 700,
-                fontSize: 12,
+                fontSize: 15,
                 cursor: 'pointer',
-                transition: 'all 0.15s',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.10)',
+                border: '1px solid rgba(51,79,97,0.12)',
               }}
             >
               A
@@ -303,124 +374,25 @@ const IModelQuickViewModal = ({
             <Box
               onClick={() => setActiveSetFilter(activeSetFilter === 'B' ? 'all' : 'B')}
               sx={{
-                width: 26,
-                height: 26,
-                borderRadius: '50%',
-                backgroundColor: activeSetFilter === 'B' ? '#d04a02' : '#576774',
-                color: '#fff',
+                width: 30,
+                height: 30,
+                borderRadius: '8px',
+                backgroundColor: activeSetFilter === 'B' ? '#d04a02' : '#dfeaf3',
+                color: activeSetFilter === 'B' ? '#fff' : '#d04a02',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontWeight: 700,
-                fontSize: 12,
+                fontSize: 15,
                 cursor: 'pointer',
-                transition: 'all 0.15s',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.10)',
+                border: '1px solid rgba(51,79,97,0.12)',
               }}
             >
               B
             </Box>
           </Tooltip>
-
-          <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.5, borderColor: '#e0e4e7' }} />
-
-          <Tooltip title="Pop out viewer">
-            <IconButton size="small" sx={{ p: 0.6, color: '#657075' }}>
-              <LaunchIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-        </Paper>
-
-        {/* Right Vertical Tool Palette (Matching Screenshot) */}
-        <Paper
-          elevation={2}
-          sx={{
-            position: 'absolute',
-            top: 72,
-            right: 16,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            borderRadius: 2,
-            p: 0.5,
-            backgroundColor: '#ffffff',
-            border: '1px solid #d0d7dc',
-            gap: 0.5,
-          }}
-        >
-          <Tooltip title="Pan tool" placement="left">
-            <IconButton
-              size="small"
-              onClick={() => setActiveTool('pan')}
-              sx={{
-                p: 0.8,
-                backgroundColor: activeTool === 'pan' ? '#eef4f8' : 'transparent',
-                color: activeTool === 'pan' ? '#087f6c' : '#70818d',
-              }}
-            >
-              <PanToolOutlinedIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-
-          <Tooltip title="Orbit / Rotate" placement="left">
-            <IconButton
-              size="small"
-              onClick={() => setActiveTool('rotate')}
-              sx={{
-                p: 0.8,
-                backgroundColor: activeTool === 'rotate' ? '#eef4f8' : 'transparent',
-                color: activeTool === 'rotate' ? '#087f6c' : '#70818d',
-              }}
-            >
-              <RotateRightOutlinedIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-
-          <Tooltip title="Fit view" placement="left">
-            <IconButton
-              size="small"
-              onClick={() => controlsRef.current?.resetView()}
-              sx={{ p: 0.8, color: '#70818d' }}
-            >
-              <FitScreenOutlinedIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-
-          <Tooltip title="Select element" placement="left">
-            <IconButton
-              size="small"
-              onClick={() => setActiveTool('select')}
-              sx={{
-                p: 0.8,
-                backgroundColor: activeTool === 'select' ? '#eef4f8' : 'transparent',
-                color: activeTool === 'select' ? '#087f6c' : '#70818d',
-              }}
-            >
-              <NearMeOutlinedIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-
-          <Tooltip title="Measure distance" placement="left">
-            <IconButton
-              size="small"
-              onClick={() => setActiveTool('measure')}
-              sx={{
-                p: 0.8,
-                backgroundColor: activeTool === 'measure' ? '#eef4f8' : 'transparent',
-                color: activeTool === 'measure' ? '#087f6c' : '#70818d',
-              }}
-            >
-              <StraightenOutlinedIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-
-          <Divider flexItem sx={{ my: 0.5, borderColor: '#e0e4e7' }} />
-
-          <Tooltip title="Inspect details" placement="left">
-            <IconButton size="small" sx={{ p: 0.8, color: '#70818d' }}>
-              <RadioButtonUncheckedIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-        </Paper>
+        </Box>
       </Box>
     </Dialog>
   );
