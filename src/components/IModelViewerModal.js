@@ -1235,7 +1235,7 @@ const IModelViewerModal = ({
                 />
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
-                <Typography sx={{ fontSize: 11, color: '#7a8c96' }}>Penetration:</Typography>
+                <Typography sx={{ fontSize: 11, color: '#7a8c96' }}>Overlap:</Typography>
                 <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#fff' }}>{selectedClash.penetration}</Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>

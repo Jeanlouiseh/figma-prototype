@@ -367,6 +367,9 @@ const SuppressionRulesDrawer = ({
   onDeleteRule,
   initialCreateRule = null,
   onSaveAndApply,
+  onUndoChanges,
+  onPreviewResults,
+  hasPendingChanges = false,
 }) => {
   const [isCreatingRule, setIsCreatingRule] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState(null);
@@ -377,12 +380,15 @@ const SuppressionRulesDrawer = ({
   React.useEffect(() => {
     if (open) {
       initialRulesSnapshot.current = rules;
-      setHasUnsavedChanges(Boolean(initialCreateRule));
+      // `rules` is the caller's working draft, which may already carry
+      // pending add/edit/delete changes from a previous visit (e.g. after
+      // "Preview results" closed the drawer) - keep the footer visible then.
+      setHasUnsavedChanges(Boolean(initialCreateRule) || hasPendingChanges);
     } else {
       setHasUnsavedChanges(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialCreateRule]);
+  }, [open, initialCreateRule, hasPendingChanges]);
 
   // Common rule fields
   const [ruleName, setRuleName] = useState('');
@@ -528,6 +534,34 @@ const SuppressionRulesDrawer = ({
     setHasUnsavedChanges(true);
     setIsCreatingRule(false);
     setEditingRuleId(null);
+  };
+
+  // Discards any pending rule add/edit/delete and closes the inline editor,
+  // if one is open, without saving it.
+  const handleUndoChangesClick = () => {
+    setIsCreatingRule(false);
+    setEditingRuleId(null);
+    setHasUnsavedChanges(false);
+    if (onUndoChanges) onUndoChanges();
+  };
+
+  // Simulates the result of the pending rule changes against the current
+  // clashes. If a rule is mid-edit, save it first so the preview reflects it.
+  const handlePreviewResultsClick = () => {
+    if (isCreatingRule) {
+      handleSave();
+    }
+    if (onPreviewResults) onPreviewResults();
+  };
+
+  // Persists the pending rule changes as the applied set. If a rule is
+  // mid-edit, save it first so it's included.
+  const handleSaveAndApplyClick = () => {
+    if (isCreatingRule) {
+      handleSave();
+    }
+    setHasUnsavedChanges(false);
+    if (onSaveAndApply) onSaveAndApply();
   };
 
   const handleOpenImportDialog = () => {
@@ -1321,11 +1355,22 @@ const SuppressionRulesDrawer = ({
     }
   };
 
+  // While a rule is being added/edited or there are unsaved add/edit/delete
+  // changes, the drawer can only be dismissed via "Undo changes" or "Save
+  // and apply changes" - clicking the backdrop, pressing Escape, or the X
+  // button are all blocked.
+  const hasPendingDrawerChanges = hasUnsavedChanges || isCreatingRule;
+
+  const handleDrawerClose = (...args) => {
+    if (hasPendingDrawerChanges) return;
+    onClose(...args);
+  };
+
   return (
     <Drawer
       anchor="right"
       open={open}
-      onClose={onClose}
+      onClose={handleDrawerClose}
       PaperProps={{
         sx: {
           width: '58vw',
@@ -1358,9 +1403,18 @@ const SuppressionRulesDrawer = ({
             <IconButton size="small" sx={{ color: '#657075' }}>
               <HelpOutlineIcon sx={{ fontSize: 20 }} />
             </IconButton>
-            <IconButton size="small" onClick={onClose} sx={{ color: '#657075' }}>
-              <CloseIcon sx={{ fontSize: 20 }} />
-            </IconButton>
+            <Tooltip title={hasPendingDrawerChanges ? 'Undo or save your changes first' : ''}>
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={handleDrawerClose}
+                  disabled={hasPendingDrawerChanges}
+                  sx={{ color: '#657075' }}
+                >
+                  <CloseIcon sx={{ fontSize: 20 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
           </Box>
         </Box>
 
@@ -2160,8 +2214,9 @@ const SuppressionRulesDrawer = ({
       </Dialog>
       </Box>
 
-      {/* Sticky Bottom Footer Actions (Cancel & Save and apply) - only shown when changes are made */}
-      {Boolean(onSaveAndApply && (hasUnsavedChanges || isCreatingRule)) && (
+      {/* Sticky Bottom Footer Actions (Undo, Preview, Save and apply) - only
+          shown once a rule has been added, edited, or removed */}
+      {Boolean((onSaveAndApply || onPreviewResults || onUndoChanges) && (hasUnsavedChanges || isCreatingRule)) && (
         <Box
           sx={{
             flexShrink: 0,
@@ -2170,52 +2225,64 @@ const SuppressionRulesDrawer = ({
             borderTop: '1px solid #e0e4e6',
             backgroundColor: '#fff',
             display: 'flex',
-            justifyContent: 'flex-end',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             gap: 1.5,
             boxShadow: '0 -4px 12px rgba(0,0,0,0.04)',
             zIndex: 10,
           }}
         >
           <Button
-            variant="outlined"
-            onClick={onClose}
+            onClick={handleUndoChangesClick}
             sx={{
               textTransform: 'none',
               color: '#344046',
-              borderColor: '#c2c9cd',
-              borderRadius: '4px',
               fontSize: 13,
               fontWeight: 500,
-              px: 2.2,
-              py: 0.6,
-              '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
+              px: 1,
+              '&:hover': { backgroundColor: '#f5f7f8' },
             }}
           >
-            Cancel
+            Undo changes
           </Button>
-          <Button
-            variant="contained"
-            onClick={() => {
-              if (isCreatingRule) {
-                handleSave();
-              }
-              onSaveAndApply();
-            }}
-            sx={{
-              textTransform: 'none',
-              backgroundColor: '#087f6c',
-              color: '#fff',
-              borderRadius: '4px',
-              fontSize: 13,
-              fontWeight: 500,
-              px: 2.2,
-              py: 0.6,
-              boxShadow: 'none',
-              '&:hover': { backgroundColor: '#066657', boxShadow: 'none' },
-            }}
-          >
-            Save and apply
-          </Button>
+
+          <Box sx={{ display: 'flex', gap: 1.5 }}>
+            <Button
+              variant="outlined"
+              onClick={handlePreviewResultsClick}
+              sx={{
+                textTransform: 'none',
+                color: '#344046',
+                borderColor: '#c2c9cd',
+                borderRadius: '4px',
+                fontSize: 13,
+                fontWeight: 500,
+                px: 2.2,
+                py: 0.6,
+                '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
+              }}
+            >
+              Preview results
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleSaveAndApplyClick}
+              sx={{
+                textTransform: 'none',
+                backgroundColor: '#087f6c',
+                color: '#fff',
+                borderRadius: '4px',
+                fontSize: 13,
+                fontWeight: 500,
+                px: 2.2,
+                py: 0.6,
+                boxShadow: 'none',
+                '&:hover': { backgroundColor: '#066657', boxShadow: 'none' },
+              }}
+            >
+              Save and apply changes
+            </Button>
+          </Box>
         </Box>
       )}
     </Drawer>

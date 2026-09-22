@@ -43,7 +43,6 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import LaunchIcon from '@mui/icons-material/Launch';
 import ViewWeekOutlinedIcon from '@mui/icons-material/ViewWeekOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
@@ -55,7 +54,6 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
-import CheckBoxOutlinedIcon from '@mui/icons-material/CheckBoxOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import AddPhotoAlternateOutlinedIcon from '@mui/icons-material/AddPhotoAlternateOutlined';
@@ -212,6 +210,65 @@ const stripSuppressedTag = (clashesList) =>
     tags: (c.tags || []).filter((t) => t !== 'Suppressed'),
   }));
 
+// Sparkle/diamond icon used on the "Preview results" banner.
+const PreviewModeIcon = (props) => (
+  <SvgIcon {...props} viewBox="0 0 24 24" sx={{ fontSize: 20, ...props.sx }}>
+    <path d="M12 2 L22 12 L12 22 L2 12 Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+  </SvgIcon>
+);
+
+// Best-effort suppression-rule evaluation used purely to power the
+// "Preview results" banner. Only rule types with fields that exist on the
+// mock clash data (Model & Category) are actually evaluated; other rule
+// types (Property, Class, Group, Relationship, ECSQL expression) don't have
+// reliable matching data to simulate against, so they're treated as no-ops.
+const evaluateSuppressionRuleAgainstClash = (rule, clash) => {
+  if (!rule || rule.disabled) return false;
+  const norm = (v) => (v || '').toString().toLowerCase();
+  const a1 = norm(rule.attribute1);
+  const a2 = norm(rule.attribute2);
+  if (!a1) return false;
+
+  if (rule.suppressBasedOn === 'Model') {
+    const matchesA1 = (v) => norm(v).includes(a1);
+    if (rule.isDualCondition && a2) {
+      const matchesA2 = (v) => norm(v).includes(a2);
+      return (
+        (matchesA1(clash.modelA) && matchesA2(clash.modelB)) ||
+        (matchesA1(clash.modelB) && matchesA2(clash.modelA))
+      );
+    }
+    return matchesA1(clash.modelA) || matchesA1(clash.modelB);
+  }
+
+  if (rule.suppressBasedOn === 'Category') {
+    const categoryB = clash.categoryB || clash.categoryA;
+    const matchesA1 = (v) => norm(v).includes(a1);
+    if (rule.isDualCondition && a2) {
+      const matchesA2 = (v) => norm(v).includes(a2);
+      return (
+        (matchesA1(clash.categoryA) && matchesA2(categoryB)) ||
+        (matchesA1(categoryB) && matchesA2(clash.categoryA))
+      );
+    }
+    return matchesA1(clash.categoryA) || matchesA1(categoryB);
+  }
+
+  return false;
+};
+
+// Simulates the effect of a set of suppression rules on a list of clashes,
+// returning a map of clash id -> resulting status. Used for the suppression
+// rules "Preview results" flow.
+const simulateSuppressionStatuses = (rules, clashesList) => {
+  const statusById = {};
+  clashesList.forEach((clash) => {
+    const suppressedByRule = (rules || []).some((rule) => evaluateSuppressionRuleAgainstClash(rule, clash));
+    statusById[clash.id] = suppressedByRule ? 'Suppressed' : (clash.status || '');
+  });
+  return statusById;
+};
+
 // "Automatic run" defaults to weekly on Mondays at 9:00 AM EST (see the
 // Automatic run summary in the right panel). Pick a random Monday that
 // already occurred in the past to seed the Schedule tab's Start date field.
@@ -231,6 +288,100 @@ const getRandomPastMonday = () => {
   return `${mm}/${dd}/${yyyy}`;
 };
 
+// Columns available in the clash data table. `locked` columns cannot be hidden
+// from the column manager so rows always stay identifiable.
+const CLASH_TABLE_COLUMNS = [
+  {
+    key: 'id',
+    label: 'ID',
+    locked: true,
+    cellSx: { fontWeight: 500, color: '#1c1f21', whiteSpace: 'nowrap' },
+    render: (clash) => clash.id,
+  },
+  {
+    key: 'idNum',
+    label: 'ID Number',
+    cellSx: { whiteSpace: 'nowrap' },
+    render: (clash) => clash.idNum || '',
+  },
+  {
+    key: 'status',
+    label: 'Status',
+    cellSx: (clash) => ({ color: clash.status ? '#536066' : 'transparent' }),
+    render: (clash) => clash.status || '',
+  },
+  {
+    key: 'elementA',
+    label: 'Element A',
+    cellSx: { maxWidth: 140 },
+    render: (clash) => (
+      <Typography noWrap sx={{ fontSize: 12.5 }}>
+        {clash.elementA}
+      </Typography>
+    ),
+  },
+  {
+    key: 'elementB',
+    label: 'Element B',
+    cellSx: { maxWidth: 140 },
+    render: (clash) => (
+      <Typography noWrap sx={{ fontSize: 12.5 }}>
+        {clash.elementB}
+      </Typography>
+    ),
+  },
+  {
+    key: 'modelA',
+    label: 'Model A',
+    cellSx: { maxWidth: 130 },
+    render: (clash) => (
+      <Typography noWrap sx={{ fontSize: 12.5 }}>
+        {clash.modelA}
+      </Typography>
+    ),
+  },
+  {
+    key: 'modelB',
+    label: 'Model B',
+    cellSx: { maxWidth: 130 },
+    render: (clash) => (
+      <Typography noWrap sx={{ fontSize: 12.5 }}>
+        {clash.modelB}
+      </Typography>
+    ),
+  },
+  {
+    key: 'categoryA',
+    label: 'Category A',
+    cellSx: { maxWidth: 130 },
+    render: (clash) => (
+      <Typography noWrap sx={{ fontSize: 12.5 }}>
+        {clash.categoryA}
+      </Typography>
+    ),
+  },
+  {
+    key: 'tags',
+    label: 'Tags',
+    cellSx: { maxWidth: 130 },
+    render: (clash) => (
+      <Typography noWrap sx={{ fontSize: 12.5 }}>
+        {(clash.tags || []).join(', ')}
+      </Typography>
+    ),
+  },
+];
+
+const DEFAULT_VISIBLE_COLUMN_KEYS = [
+  'id',
+  'status',
+  'elementA',
+  'elementB',
+  'modelA',
+  'modelB',
+  'categoryA',
+];
+
 const CLUSTER_OPTIONS = [
   'Element A',
   'Element B',
@@ -240,7 +391,6 @@ const CLUSTER_OPTIONS = [
   'Category A',
   'Category B',
   'Tags',
-  'Location',
   'Form',
   'Form status',
 ];
@@ -370,9 +520,6 @@ const getClusterGroups = (clashesList, clusterType) => {
         break;
       case 'Element B':
         key = clash.elementB || 'Element B';
-        break;
-      case 'Location':
-        key = clash.location || 'Level 1';
         break;
       case 'Form status':
         key = clash.formStatus || 'No form';
@@ -621,6 +768,38 @@ const ClashTestDetail = () => {
   const [clusterActionAnchorEl, setClusterActionAnchorEl] = useState(null);
   const [clusterActionGroup, setClusterActionGroup] = useState(null);
 
+  // Column manager state for the clash data table
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(DEFAULT_VISIBLE_COLUMN_KEYS);
+  const [columnMenuAnchorEl, setColumnMenuAnchorEl] = useState(null);
+
+  const visibleColumns = useMemo(
+    () => CLASH_TABLE_COLUMNS.filter((column) => visibleColumnKeys.includes(column.key)),
+    [visibleColumnKeys]
+  );
+
+  const handleOpenColumnMenu = (e) => {
+    setColumnMenuAnchorEl(e.currentTarget);
+  };
+
+  const handleCloseColumnMenu = () => {
+    setColumnMenuAnchorEl(null);
+  };
+
+  const handleToggleColumn = (columnKey) => {
+    const column = CLASH_TABLE_COLUMNS.find((c) => c.key === columnKey);
+    if (!column || column.locked) return;
+
+    setVisibleColumnKeys((prev) =>
+      prev.includes(columnKey)
+        ? prev.filter((key) => key !== columnKey)
+        : CLASH_TABLE_COLUMNS.filter((c) => c.key === columnKey || prev.includes(c.key)).map((c) => c.key)
+    );
+  };
+
+  const handleResetColumns = () => {
+    setVisibleColumnKeys(DEFAULT_VISIBLE_COLUMN_KEYS);
+  };
+
   // Accordion states when a clash IS selected
   const [clashDetailsOpen, setClashDetailsOpen] = useState(true);
   const [clashFormsOpen, setClashFormsOpen] = useState(false);
@@ -672,9 +851,22 @@ const ClashTestDetail = () => {
 
   const [suppressionRules, setSuppressionRules] = useState(initialRules);
 
+  // Working copy of the rules edited inside the Suppression rules drawer.
+  // Additions/edits/removals only touch this draft; nothing is persisted
+  // (and the clash table is unaffected) until "Save and apply changes". The
+  // draft intentionally persists across the drawer opening/closing (e.g.
+  // while previewing results) so pending edits aren't silently lost, and
+  // only resyncs with the applied rules when switching to a different test.
+  const [draftSuppressionRules, setDraftSuppressionRules] = useState(initialRules);
+
   useEffect(() => {
     setSuppressionRules(initialRules);
+    setDraftSuppressionRules(initialRules);
   }, [initialRules]);
+
+  // Preview mode: set when the user clicks "Preview results" in the drawer.
+  // { statusById, changedIds, changedCount, unchangedCount, showAffectedOnly }
+  const [previewMode, setPreviewMode] = useState(null);
 
   const handleSwitchIModel = (newIModel) => {
     const stored = getStoredTests();
@@ -756,36 +948,70 @@ const ClashTestDetail = () => {
   };
 
   const handleSaveAndApplyFromDrawer = () => {
-    // Suppress the currently selected clashes
+    // Commit the draft rules as the officially applied set.
+    setSuppressionRules(draftSuppressionRules);
+    if (testData.id) {
+      updateTestInStore(testData.id, { suppressionRules: draftSuppressionRules });
+    }
+
+    // Suppress the currently selected clashes (legacy quick-suppress path)
     const targetRows = checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
     if (targetRows.length > 0) {
       setClashes((prev) =>
         prev.map((c) => (targetRows.includes(c.id) ? { ...c, status: 'Suppressed' } : c))
       );
     }
+
+    setPreviewMode(null);
     setSuppressionDrawerOpen(false);
     setInitialCreateRuleData(null);
+    setToastMessage('Suppression rules saved and applied');
   };
 
+  // Rule add/edit/delete inside the drawer only ever touches the draft;
+  // nothing is persisted until "Save and apply changes" is clicked.
   const handleSaveSuppressionRule = (newRule) => {
-    setSuppressionRules((prev) => {
+    setDraftSuppressionRules((prev) => {
       const exists = prev.some((r) => r.id === newRule.id);
-      const updated = exists ? prev.map((r) => (r.id === newRule.id ? newRule : r)) : [newRule, ...prev];
-      if (testData.id) {
-        updateTestInStore(testData.id, { suppressionRules: updated });
-      }
-      return updated;
+      return exists ? prev.map((r) => (r.id === newRule.id ? newRule : r)) : [newRule, ...prev];
     });
   };
 
   const handleDeleteSuppressionRule = (ruleId) => {
-    setSuppressionRules((prev) => {
-      const updated = prev.filter((r) => r.id !== ruleId);
-      if (testData.id) {
-        updateTestInStore(testData.id, { suppressionRules: updated });
-      }
-      return updated;
+    setDraftSuppressionRules((prev) => prev.filter((r) => r.id !== ruleId));
+  };
+
+  // Discards any pending add/edit/delete made in the drawer, reverting the
+  // draft back to the last applied set of rules.
+  const handleUndoSuppressionChanges = () => {
+    setDraftSuppressionRules(suppressionRules);
+  };
+
+  // Simulates the draft rules against the current clashes and surfaces the
+  // result as a dismissible banner above the clash table, without touching
+  // the clashes' real statuses or persisting anything.
+  const handlePreviewSuppressionResults = () => {
+    const statusById = simulateSuppressionStatuses(draftSuppressionRules, clashes);
+    const changedIds = clashes
+      .filter((c) => statusById[c.id] !== (c.status || ''))
+      .map((c) => c.id);
+    setPreviewMode({
+      statusById,
+      changedIds,
+      changedCount: changedIds.length,
+      unchangedCount: clashes.length - changedIds.length,
+      showAffectedOnly: false,
     });
+    setSuppressionDrawerOpen(false);
+  };
+
+  const handleExitPreviewMode = () => {
+    setPreviewMode(null);
+    setSuppressionDrawerOpen(true);
+  };
+
+  const handleToggleShowAffectedOnly = () => {
+    setPreviewMode((prev) => (prev ? { ...prev, showAffectedOnly: !prev.showAffectedOnly } : prev));
   };
 
   // Tagging Popover & Toast State
@@ -818,6 +1044,7 @@ const ClashTestDetail = () => {
   const [tsAutoClose, setTsAutoClose] = useState(true);
   const [tsDefaultClosedStatus, setTsDefaultClosedStatus] = useState('Closed');
   const [tsDefaultOpenStatus, setTsDefaultOpenStatus] = useState('Open');
+  const testSettingsSavedValuesRef = useRef(null);
   const [viewerTool, setViewerTool] = useState('rotate');
   const [viewerPoppedOut, setViewerPoppedOut] = useState(false);
 
@@ -827,8 +1054,27 @@ const ClashTestDetail = () => {
   const [elementBVisible, setElementBVisible] = useState(true);
   const [isolateNonClashing, setIsolateNonClashing] = useState(false);
 
+  const testSettingsValues = {
+    tsAutoRun,
+    tsFrequency,
+    tsStartDate,
+    tsStartTime,
+    tsEndDate,
+    tsTagList,
+    tsElementAPct,
+    tsElementBPct,
+    tsNonClashPct,
+    tsAutoClose,
+    tsDefaultClosedStatus,
+    tsDefaultOpenStatus,
+  };
+  const testSettingsDirty =
+    testSettingsSavedValuesRef.current !== null &&
+    JSON.stringify(testSettingsValues) !== JSON.stringify(testSettingsSavedValuesRef.current);
+
   const handleOpenTestSettings = (e) => {
     setTestSettingsTab('schedule');
+    testSettingsSavedValuesRef.current = testSettingsValues;
     setTestSettingsAnchorEl(e.currentTarget);
   };
 
@@ -837,7 +1083,6 @@ const ClashTestDetail = () => {
   };
 
   const handleOpenTsStartDateCalendar = (e) => {
-    if (!tsAutoRun) return;
     setTsStartDateAnchorEl(e.currentTarget);
   };
 
@@ -1509,13 +1754,18 @@ const ClashTestDetail = () => {
     }
   };
 
-  const filteredClashes = clashes.filter(
-    (c) =>
-      c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.elementA.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.elementB.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.status.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredClashes = clashes
+    // While previewing suppression rule changes, show the simulated status
+    // instead of the real one (nothing is actually applied yet).
+    .map((c) => (previewMode ? { ...c, status: previewMode.statusById[c.id] ?? c.status } : c))
+    .filter((c) => (previewMode?.showAffectedOnly ? previewMode.changedIds.includes(c.id) : true))
+    .filter(
+      (c) =>
+        c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.elementA.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.elementB.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.status.toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   const clusterGroups = useMemo(() => {
     return getClusterGroups(filteredClashes, clusterBy);
@@ -1556,7 +1806,7 @@ const ClashTestDetail = () => {
         'Model A',
         'Model B',
         'Category A',
-        'Penetration',
+        'Overlap',
         'Tags',
       ];
 
@@ -1595,7 +1845,7 @@ const ClashTestDetail = () => {
         'Model A',
         'Model B',
         'Category A',
-        'Penetration',
+        'Overlap',
         'Tags',
       ];
 
@@ -1640,7 +1890,7 @@ const ClashTestDetail = () => {
       'Model A',
       'Model B',
       'Category A',
-      'Penetration',
+      'Overlap',
       'Tags',
     ];
 
@@ -1678,21 +1928,6 @@ const ClashTestDetail = () => {
       prev.map((c) => (groupIds.includes(c.id) ? { ...c, status: 'Suppressed' } : c))
     );
     setToastMessage(`Suppressed ${groupIds.length} clashes in ${group.name}`);
-    setClusterActionAnchorEl(null);
-  };
-
-  const handleSelectClusterAll = (group) => {
-    if (!group) return;
-    toggleGroupAll(group.clashes);
-    setClusterActionAnchorEl(null);
-  };
-
-  const handleTagCluster = (group, e) => {
-    if (!group) return;
-    const groupIds = group.clashes.map((c) => c.id);
-    setCheckedIds(groupIds);
-    setPendingSelectedTags([]);
-    setTagAnchorEl(e.currentTarget);
     setClusterActionAnchorEl(null);
   };
 
@@ -2130,6 +2365,56 @@ const ClashTestDetail = () => {
         <SearchIcon sx={{ ml: 'auto', mr: 1, fontSize: 20, color: '#8a9296' }} />
       </Box>
 
+      {/* Suppression rules "Preview results" banner */}
+      {previewMode && (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            px: 3,
+            py: 1.25,
+            backgroundColor: '#0b6e5c',
+            color: '#fff',
+          }}
+        >
+          <PreviewModeIcon sx={{ color: '#fff' }} />
+          <Box sx={{ flex: 1 }}>
+            <Typography sx={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.35 }}>
+              {previewMode.changedCount} clash{previewMode.changedCount === 1 ? '' : 'es'} changed status. {previewMode.unchangedCount} clash{previewMode.unchangedCount === 1 ? '' : 'es'} remain unchanged.
+            </Typography>
+            <Typography sx={{ fontSize: 12, color: 'rgba(255,255,255,0.85)' }}>
+              Results are not final until changes are applied.
+            </Typography>
+          </Box>
+          <Link
+            component="button"
+            type="button"
+            onClick={handleToggleShowAffectedOnly}
+            underline="always"
+            sx={{ color: '#fff', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap' }}
+          >
+            {previewMode.showAffectedOnly ? 'Show all clashes' : 'Show affected clashes only'}
+          </Link>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleExitPreviewMode}
+            sx={{
+              textTransform: 'none',
+              color: '#fff',
+              borderColor: 'rgba(255,255,255,0.6)',
+              whiteSpace: 'nowrap',
+              fontSize: 13,
+              fontWeight: 500,
+              '&:hover': { borderColor: '#fff', backgroundColor: 'rgba(255,255,255,0.08)' },
+            }}
+          >
+            Exit preview mode
+          </Button>
+        </Box>
+      )}
+
       {/* Main Page Layout */}
       <Box sx={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* Left Side: Test Title, Actions, Clashes Table */}
@@ -2141,7 +2426,7 @@ const ClashTestDetail = () => {
                 {testData.name || 'AR vs EL'}
               </Typography>
               <Typography sx={{ fontSize: 13, color: '#657075', mt: 0.5 }}>
-                {testData.lastRun || '07 August 2026 09:00AM EST'}
+                Last run: {testData.lastRun || '07 August 2026 09:00AM EST'}
               </Typography>
             </Box>
             <IconButton
@@ -2669,18 +2954,6 @@ const ClashTestDetail = () => {
                 }}
               >
                 <MenuItem
-                  onClick={() => handleSelectClusterAll(clusterActionGroup)}
-                  sx={{ fontSize: 13, py: 0.8, px: 1.5, color: '#1c1f21' }}
-                >
-                  <ListItemIcon sx={{ color: '#536066', minWidth: 28 }}>
-                    <CheckBoxOutlinedIcon sx={{ fontSize: 18 }} />
-                  </ListItemIcon>
-                  {clusterActionGroup?.clashes.every((c) => checkedIds.includes(c.id))
-                    ? 'Deselect all'
-                    : 'Select all in cluster'}
-                </MenuItem>
-
-                <MenuItem
                   onClick={() => handleSuppressCluster(clusterActionGroup)}
                   sx={{ fontSize: 13, py: 0.8, px: 1.5, color: '#1c1f21' }}
                 >
@@ -2699,16 +2972,6 @@ const ClashTestDetail = () => {
                   </ListItemIcon>
                   Export cluster as .csv
                 </MenuItem>
-
-                <MenuItem
-                  onClick={(e) => handleTagCluster(clusterActionGroup, e)}
-                  sx={{ fontSize: 13, py: 0.8, px: 1.5, color: '#1c1f21' }}
-                >
-                  <ListItemIcon sx={{ color: '#536066', minWidth: 28 }}>
-                    <LocalOfferOutlinedIcon sx={{ fontSize: 18 }} />
-                  </ListItemIcon>
-                  Tag cluster
-                </MenuItem>
               </Menu>
             </TableContainer>
           ) : (
@@ -2726,17 +2989,19 @@ const ClashTestDetail = () => {
                           sx={{ p: 0.5, color: '#9fb8ae', '&.Mui-checked': { color: '#087f6c' } }}
                         />
                       </TableCell>
-                      <TableCell>ID</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Element A</TableCell>
-                      <TableCell>Element B</TableCell>
-                      <TableCell>Model A</TableCell>
-                      <TableCell>Model B</TableCell>
-                      <TableCell>Category A</TableCell>
+                      {visibleColumns.map((column) => (
+                        <TableCell key={column.key}>{column.label}</TableCell>
+                      ))}
                       <TableCell align="right" sx={{ width: 36 }}>
-                        <IconButton size="small" sx={{ color: '#536066', p: 0.2 }}>
-                          <ViewWeekOutlinedIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
+                        <Tooltip title="Manage columns">
+                          <IconButton
+                            size="small"
+                            onClick={handleOpenColumnMenu}
+                            sx={{ color: '#536066', p: 0.2 }}
+                          >
+                            <ViewWeekOutlinedIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </Tooltip>
                       </TableCell>
                     </TableRow>
                   </TableHead>
@@ -2763,35 +3028,14 @@ const ClashTestDetail = () => {
                               sx={{ p: 0.5, color: '#9fb8ae', '&.Mui-checked': { color: '#087f6c' } }}
                             />
                           </TableCell>
-                          <TableCell sx={{ fontWeight: 500, color: '#1c1f21', whiteSpace: 'nowrap' }}>{clash.id}</TableCell>
-                          <TableCell sx={{ color: clash.status ? '#536066' : 'transparent' }}>
-                            {clash.status || ''}
-                          </TableCell>
-                          <TableCell sx={{ maxWidth: 140 }}>
-                            <Typography noWrap sx={{ fontSize: 12.5 }}>
-                              {clash.elementA}
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={{ maxWidth: 140 }}>
-                            <Typography noWrap sx={{ fontSize: 12.5 }}>
-                              {clash.elementB}
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={{ maxWidth: 130 }}>
-                            <Typography noWrap sx={{ fontSize: 12.5 }}>
-                              {clash.modelA}
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={{ maxWidth: 130 }}>
-                            <Typography noWrap sx={{ fontSize: 12.5 }}>
-                              {clash.modelB}
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={{ maxWidth: 130 }}>
-                            <Typography noWrap sx={{ fontSize: 12.5 }}>
-                              {clash.categoryA}
-                            </Typography>
-                          </TableCell>
+                          {visibleColumns.map((column) => (
+                            <TableCell
+                              key={column.key}
+                              sx={typeof column.cellSx === 'function' ? column.cellSx(clash) : column.cellSx}
+                            >
+                              {column.render(clash)}
+                            </TableCell>
+                          ))}
                           <TableCell align="right" />
                         </TableRow>
                       );
@@ -2799,6 +3043,59 @@ const ClashTestDetail = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+
+              {/* Column manager menu */}
+              <Menu
+                anchorEl={columnMenuAnchorEl}
+                open={Boolean(columnMenuAnchorEl)}
+                onClose={handleCloseColumnMenu}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                PaperProps={{
+                  sx: {
+                    mt: 0.5,
+                    minWidth: 210,
+                    borderRadius: '6px',
+                    border: '1px solid #c2c9cd',
+                    boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+                  },
+                }}
+              >
+                <Typography
+                  sx={{ fontSize: 12, fontWeight: 600, color: '#657075', px: 1.5, py: 0.75 }}
+                >
+                  Manage columns
+                </Typography>
+                <Divider sx={{ borderColor: '#eaedf0' }} />
+                {CLASH_TABLE_COLUMNS.map((column) => {
+                  const isVisible = visibleColumnKeys.includes(column.key);
+                  return (
+                    <MenuItem
+                      key={column.key}
+                      dense
+                      disabled={column.locked}
+                      onClick={() => handleToggleColumn(column.key)}
+                      sx={{ fontSize: 13, color: '#1c1f21', py: 0.25 }}
+                    >
+                      <Checkbox
+                        size="small"
+                        checked={isVisible}
+                        disabled={column.locked}
+                        sx={{ p: 0.5, mr: 0.5, color: '#9fb8ae', '&.Mui-checked': { color: '#087f6c' } }}
+                      />
+                      {column.label}
+                    </MenuItem>
+                  );
+                })}
+                <Divider sx={{ borderColor: '#eaedf0' }} />
+                <MenuItem
+                  dense
+                  onClick={handleResetColumns}
+                  sx={{ fontSize: 13, color: '#344046', py: 0.5 }}
+                >
+                  Reset to default
+                </MenuItem>
+              </Menu>
 
               {/* Table Footer Pagination */}
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 2, pt: 2, mt: 'auto', borderTop: '1px solid #eaedf0' }}>
@@ -2843,74 +3140,6 @@ const ClashTestDetail = () => {
             iModelName={testData.iModel || '3D Model'}
           >
             <div ref={setMountNode} style={{ width: '100%', height: '100%', overflow: 'hidden' }} />
-
-            {/* Floating 3D overlay controls */}
-            <Box sx={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexDirection: 'column', gap: 0.5, pointerEvents: 'none', maxWidth: '85%' }}>
-              <Chip
-                label={
-                  hasModelSelection
-                    ? selectedModelClashes.length === 1
-                      ? `${testData.iModel || '3D Model'}: ${selectedModelClashes[0].id}`
-                      : `${testData.iModel || '3D Model'}: ${selectedModelClashes.length} clashes`
-                    : `${testData.iModel || '3D Model'} (Pittsburgh, PA)`
-                }
-                size="small"
-                sx={{
-                  backgroundColor: 'rgba(20, 26, 30, 0.85)',
-                  color: '#fff',
-                  border: '1px solid #2d3b42',
-                  fontSize: 10.5,
-                  fontWeight: 600,
-                  height: 22,
-                  width: 'fit-content',
-                }}
-              />
-              {hasModelSelection && (
-                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                  {selectedModelClashes.length === 1 && currentClash ? (
-                    <>
-                      <Chip
-                        size="small"
-                        label={`Element A: ${(currentClash.elementA || 'Structural').split('[')[0].trim()}`}
-                        sx={{
-                          backgroundColor: 'rgba(255, 23, 68, 0.92)',
-                          color: '#fff',
-                          fontSize: 9.5,
-                          fontWeight: 600,
-                          height: 18,
-                          border: '1px solid #ff5252',
-                        }}
-                      />
-                      <Chip
-                        size="small"
-                        label={`Element B: ${(currentClash.elementB || 'MEP Utility').split('[')[0].trim()}`}
-                        sx={{
-                          backgroundColor: 'rgba(47, 111, 237, 0.92)',
-                          color: '#fff',
-                          fontSize: 9.5,
-                          fontWeight: 700,
-                          height: 18,
-                          border: '1px solid #8ab4ff',
-                        }}
-                      />
-                    </>
-                  ) : (
-                    <Chip
-                      size="small"
-                      label={`Showing ${selectedModelClashes.map((clash) => clash.id).join(', ')}`}
-                      sx={{
-                        backgroundColor: 'rgba(255, 214, 0, 0.92)',
-                        color: '#1c1f21',
-                        fontSize: 9.5,
-                        fontWeight: 700,
-                        height: 18,
-                        border: '1px solid #fff176',
-                      }}
-                    />
-                  )}
-                </Box>
-              )}
-            </Box>
 
             <Box
               sx={{
@@ -3194,9 +3423,9 @@ const ClashTestDetail = () => {
                         </Typography>
                       </Box>
 
-                      {/* Penetration */}
+                      {/* Overlap */}
                       <Box>
-                        <Typography sx={{ fontSize: 12, color: '#657075', fontWeight: 500 }}>Penetration</Typography>
+                        <Typography sx={{ fontSize: 12, color: '#657075', fontWeight: 500 }}>Overlap</Typography>
                         <Typography sx={{ fontSize: 13, color: '#1c1f21', mt: 0.25 }}>
                           {detailValues.penetration}
                         </Typography>
@@ -3503,10 +3732,20 @@ const ClashTestDetail = () => {
                       <Box>
                         <Typography sx={{ fontSize: 12, color: '#657075', fontWeight: 500 }}>Automatic run</Typography>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 0.25 }}>
-                          <Typography sx={{ fontSize: 13, color: '#1c1f21' }}>Every Monday at 9:00 AM EST</Typography>
-                          <IconButton size="small" sx={{ p: 0.25, color: '#657075', '&:hover': { color: '#087f6c' } }}>
-                            <EditOutlinedIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
+                          <Link
+                            onClick={handleOpenTestSettings}
+                            underline="always"
+                            sx={{
+                              color: '#087f6c',
+                              fontSize: 13,
+                              cursor: 'pointer',
+                              display: 'inline-block',
+                              fontWeight: 500,
+                              '&:hover': { color: '#066657' },
+                            }}
+                          >
+                            Every Monday at 9:00 AM EST
+                          </Link>
                         </Box>
                       </Box>
                     </Box>
@@ -3918,14 +4157,12 @@ const ClashTestDetail = () => {
                       placeholder="MM/DD/YYYY"
                       value={tsStartDate}
                       onChange={(e) => setTsStartDate(e.target.value)}
-                      disabled
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
                             <IconButton
                               size="small"
                               onClick={handleOpenTsStartDateCalendar}
-                              disabled
                               sx={{ p: 0.25, '&:hover': { backgroundColor: 'transparent' } }}
                             >
                               <CalendarTodayOutlinedIcon sx={{ fontSize: 16, color: '#8a9296' }} />
@@ -4342,7 +4579,9 @@ const ClashTestDetail = () => {
             <Button
               variant="contained"
               size="small"
+              disabled={!testSettingsDirty}
               onClick={() => {
+                testSettingsSavedValuesRef.current = testSettingsValues;
                 setToastMessage('Test settings saved');
                 handleCloseTestSettings();
               }}
@@ -4356,6 +4595,7 @@ const ClashTestDetail = () => {
                 px: 2,
                 boxShadow: 'none',
                 '&:hover': { backgroundColor: '#066657', boxShadow: 'none' },
+                '&.Mui-disabled': { backgroundColor: '#e0e4e6', color: '#8a9296' },
               }}
             >
               Save
@@ -4650,12 +4890,15 @@ const ClashTestDetail = () => {
           setSuppressionDrawerOpen(false);
           setInitialCreateRuleData(null);
         }}
-        rules={suppressionRules}
+        rules={draftSuppressionRules}
         testName={testData.name || 'AR vs EL'}
         onSaveRule={handleSaveSuppressionRule}
         onDeleteRule={handleDeleteSuppressionRule}
         initialCreateRule={initialCreateRuleData}
         onSaveAndApply={handleSaveAndApplyFromDrawer}
+        onUndoChanges={handleUndoSuppressionChanges}
+        onPreviewResults={handlePreviewSuppressionResults}
+        hasPendingChanges={draftSuppressionRules !== suppressionRules}
       />
     </Box>
   );

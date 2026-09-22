@@ -905,30 +905,6 @@ const CreateClashTest = () => {
           <Button
             variant="outlined"
             size="small"
-            onClick={() =>
-              navigate(`/clash-detection/test/${testInfo.id || 'new'}`, {
-                state: {
-                  ...testInfo,
-                  suppressionRules,
-                },
-              })
-            }
-            sx={{
-              textTransform: 'none',
-              color: '#344046',
-              borderColor: '#c2c9cd',
-              borderRadius: '4px',
-              fontSize: 13,
-              fontWeight: 500,
-              px: 1.5,
-              py: 0.6,
-            }}
-          >
-            Preview results
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
             onClick={() => setQuickViewOpen(true)}
             sx={{
               textTransform: 'none',

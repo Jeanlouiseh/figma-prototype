@@ -47,9 +47,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import CloseIcon from '@mui/icons-material/Close';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
-import ViewInArIcon from '@mui/icons-material/ViewInAr';
 import { ClashIcon } from '../components/Sidebar';
-import IModelViewerModal from '../components/IModelViewerModal';
 import { getStoredTests, saveStoredTests } from '../data/clashTestsStore';
 
 // Toolbar action icons matching the design specification: Import, Export, Download
@@ -175,8 +173,6 @@ const ClashDetection = () => {
   const [editFormErrors, setEditFormErrors] = useState({});
   const [toastMessage, setToastMessage] = useState('');
   const [deletedBackup, setDeletedBackup] = useState(null);
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [activeViewModel, setActiveViewModel] = useState('Roberto Clemente Bridge');
 
   const showToast = (msg) => setToastMessage(msg);
 
@@ -388,15 +384,6 @@ const ClashDetection = () => {
       { icon: ImportActionIcon, label: 'Import', onClick: () => setImportDialogOpen(true) },
       { icon: ExportActionIcon, label: 'Export', onClick: () => setExportDialogOpen(true) },
       { icon: DownloadActionIcon, label: 'Download', onClick: () => showToast('Downloaded results table (Excel)') },
-      {
-        icon: ViewInArIcon,
-        label: '3D BIM Viewer',
-        onClick: () => {
-          const selected = tests.find((t) => selectedTests.includes(t.id));
-          setActiveViewModel(selected ? selected.iModel : selectedFilter !== 'All' ? selectedFilter : 'Roberto Clemente Bridge');
-          setViewerOpen(true);
-        },
-      },
     ],
   ];
 
@@ -1198,15 +1185,6 @@ const ClashDetection = () => {
                 )}
               </Box>
             }
-          />
-
-          {/* Interactive 3D BIM Viewer Modal */}
-          <IModelViewerModal
-            open={viewerOpen}
-            onClose={() => setViewerOpen(false)}
-            modelName={activeViewModel}
-            selectedSetA={[]}
-            selectedSetB={[]}
           />
         </Box>
       </Box>
