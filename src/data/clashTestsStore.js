@@ -149,6 +149,10 @@ export const INITIAL_TESTS = [
     createdBy: 'Jeanlouise Hornberger',
     lastRunDate: '02 April 2026',
     suppressionRules: ROBERTO_CLEMENTE_DEFAULT_RULES,
+    runCount: 1,
+    prevActive: null,
+    prevTotal: null,
+    viewedSinceRun: true,
   },
   {
     id: 2,
@@ -162,6 +166,10 @@ export const INITIAL_TESTS = [
     createdBy: 'Jeanlouise Hornberger',
     lastRunDate: '23 May 2026',
     suppressionRules: ROBERTO_CLEMENTE_DEFAULT_RULES,
+    runCount: 1,
+    prevActive: null,
+    prevTotal: null,
+    viewedSinceRun: true,
   },
   {
     id: 3,
@@ -175,6 +183,10 @@ export const INITIAL_TESTS = [
     createdBy: 'Jeanlouise Hornberger',
     lastRunDate: '25 May 2026',
     suppressionRules: ROBERTO_CLEMENTE_DEFAULT_RULES,
+    runCount: 1,
+    prevActive: null,
+    prevTotal: null,
+    viewedSinceRun: true,
   },
   {
     id: 4,
@@ -188,6 +200,10 @@ export const INITIAL_TESTS = [
     createdBy: 'Jeanlouise Hornberger',
     lastRunDate: '03 January 2026',
     suppressionRules: ROBERTO_CLEMENTE_DEFAULT_RULES,
+    runCount: 1,
+    prevActive: null,
+    prevTotal: null,
+    viewedSinceRun: true,
   },
   {
     id: 5,
@@ -201,6 +217,10 @@ export const INITIAL_TESTS = [
     createdBy: 'Jeanlouise Hornberger',
     lastRunDate: '27 December 2025',
     suppressionRules: ROBERTO_CLEMENTE_DEFAULT_RULES,
+    runCount: 1,
+    prevActive: null,
+    prevTotal: null,
+    viewedSinceRun: true,
   },
   {
     id: 6,
@@ -214,6 +234,10 @@ export const INITIAL_TESTS = [
     createdBy: 'Jeanlouise Hornberger',
     lastRunDate: '23 March 2026',
     suppressionRules: PPG_PLACE_DEFAULT_RULES,
+    runCount: 1,
+    prevActive: null,
+    prevTotal: null,
+    viewedSinceRun: true,
   },
   {
     id: 7,
@@ -227,6 +251,10 @@ export const INITIAL_TESTS = [
     createdBy: 'Jeanlouise Hornberger',
     lastRunDate: '02 April 2026',
     suppressionRules: LIBERTY_BRIDGE_DEFAULT_RULES,
+    runCount: 1,
+    prevActive: null,
+    prevTotal: null,
+    viewedSinceRun: true,
   },
   {
     id: 8,
@@ -240,6 +268,10 @@ export const INITIAL_TESTS = [
     createdBy: 'Jeanlouise Hornberger',
     lastRunDate: '14 October 2025',
     suppressionRules: PPG_PLACE_DEFAULT_RULES,
+    runCount: 1,
+    prevActive: null,
+    prevTotal: null,
+    viewedSinceRun: true,
   },
   {
     id: 9,
@@ -253,6 +285,10 @@ export const INITIAL_TESTS = [
     createdBy: 'Jeanlouise Hornberger',
     lastRunDate: '21 October 2025',
     suppressionRules: LIBERTY_BRIDGE_DEFAULT_RULES,
+    runCount: 1,
+    prevActive: null,
+    prevTotal: null,
+    viewedSinceRun: true,
   },
   {
     id: 10,
@@ -266,10 +302,22 @@ export const INITIAL_TESTS = [
     createdBy: 'Jeanlouise Hornberger',
     lastRunDate: '29 September 2025',
     suppressionRules: PPG_PLACE_DEFAULT_RULES,
+    runCount: 1,
+    prevActive: null,
+    prevTotal: null,
+    viewedSinceRun: true,
   },
 ];
 
 const STORAGE_KEY = 'bentley_clash_detection_tests';
+
+// Default run-tracking fields applied to any test missing them (fresh installs & migrations)
+const RUN_TRACKING_DEFAULTS = {
+  runCount: 1,
+  prevActive: null,
+  prevTotal: null,
+  viewedSinceRun: true,
+};
 
 export const getStoredTests = () => {
   try {
@@ -308,6 +356,11 @@ export const getStoredTests = () => {
             } else {
               updated = { ...updated, suppressionRules: ROBERTO_CLEMENTE_DEFAULT_RULES };
             }
+            hasChanges = true;
+          }
+
+          if (updated.runCount === undefined) {
+            updated = { ...RUN_TRACKING_DEFAULTS, ...updated };
             hasChanges = true;
           }
           return updated;

@@ -18,7 +18,6 @@ import {
   Link,
   List,
   ListItem,
-  ListItemButton,
   ListItemText,
   Menu,
   MenuItem,
@@ -47,7 +46,10 @@ import CircularProgress from '@mui/material/CircularProgress';
 import CloseIcon from '@mui/icons-material/Close';
 import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
+import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import { ClashIcon } from '../components/Sidebar';
+import ProjectHeader from '../components/ProjectHeader';
+import SuppressionRulesDrawer from '../components/SuppressionRulesDrawer';
 import { getStoredTests, saveStoredTests } from '../data/clashTestsStore';
 
 // Toolbar action icons matching the design specification: Import, Export, Download
@@ -140,10 +142,23 @@ const ClashDetection = () => {
   const location = useLocation();
   const [tests, setTests] = useState(() => getStoredTests());
 
-  const [selectedFilter, setSelectedFilter] = useState('All');
+  const selectedFilter = 'All';
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTests, setSelectedTests] = useState([]);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState(null);
   const [runningTests, setRunningTests] = useState([]);
+  const [suppressionDrawerOpen, setSuppressionDrawerOpen] = useState(false);
+  const [libraryRules, setLibraryRules] = useState(() =>
+    getStoredTests().flatMap((test) =>
+      (test.suppressionRules || []).map((rule) => ({
+        ...rule,
+        id: `${test.id || test.name}:${rule.id}`,
+        sourceRuleId: rule.id,
+        sourceTestName: test.name,
+        importedFrom: rule.importedFrom || test.name,
+      }))
+    )
+  );
   const [columnMenuAnchor, setColumnMenuAnchor] = useState(null);
   const [visibleColumns, setVisibleColumns] = useState({
     name: true,
@@ -176,6 +191,25 @@ const ClashDetection = () => {
 
   const showToast = (msg) => setToastMessage(msg);
 
+  const availableSuppressionRules = libraryRules.map((rule) => ({
+    importId: `library:${rule.id}`,
+    sourceTestName: rule.sourceTestName || rule.importedFrom || 'Suppression rules library',
+    rule,
+  }));
+
+  const handleSaveLibraryRule = (newRule) => {
+    setLibraryRules((prev) => {
+      const existingIndex = prev.findIndex((rule) => rule.id === newRule.id);
+      if (existingIndex === -1) return [newRule, ...prev];
+
+      return prev.map((rule, index) => (index === existingIndex ? newRule : rule));
+    });
+  };
+
+  const handleDeleteLibraryRule = (ruleId) => {
+    setLibraryRules((prev) => prev.filter((rule) => rule.id !== ruleId));
+  };
+
   const openRowMenu = (event, testId) => {
     event.stopPropagation();
     setMenuAnchor(event.currentTarget);
@@ -202,13 +236,21 @@ const ClashDetection = () => {
         setTests((prevTests) => {
           const updatedTests = prevTests.map((t) => {
             if (!stillRunning.includes(t.id)) return t;
-            const activeVal = Math.floor(Math.random() * 2500) + 400;
-            const totalVal = activeVal + Math.floor(Math.random() * 1200) + 120;
+            // Simulate incremental growth between runs: new active clashes found,
+            // and new resolved clashes since the previous run.
+            const newActiveFound = Math.floor(Math.random() * 300) + 20;
+            const newResolvedFound = Math.floor(Math.random() * 300) + 20;
+            const activeVal = Number(t.active) + newActiveFound;
+            const totalVal = Number(t.total) + newResolvedFound;
             return {
               ...t,
               active: String(activeVal),
               total: String(totalVal),
               lastRun: 'Just now',
+              runCount: (t.runCount || 1) + 1,
+              prevActive: t.active,
+              prevTotal: t.total,
+              viewedSinceRun: false,
             };
           });
           saveStoredTests(updatedTests);
@@ -354,10 +396,31 @@ const ClashDetection = () => {
     return matchesFilter && matchesSearch;
   });
 
-  const handleToggleTest = (testId) => {
-    setSelectedTests((prev) =>
-      prev.includes(testId) ? prev.filter((id) => id !== testId) : [...prev, testId]
-    );
+  const handleToggleTest = (testId, index, event) => {
+    if (event && event.shiftKey && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      const rangeIds = filteredTests.slice(start, end + 1).map((t) => t.id);
+      setSelectedTests((prev) => Array.from(new Set([...prev, ...rangeIds])));
+    } else {
+      setSelectedTests((prev) =>
+        prev.includes(testId) ? prev.filter((id) => id !== testId) : [...prev, testId]
+      );
+      setLastSelectedIndex(index);
+    }
+  };
+
+  const handleRowClick = (test) => {
+    if (!test.viewedSinceRun) {
+      setTests((prevTests) => {
+        const updatedTests = prevTests.map((t) =>
+          t.id === test.id ? { ...t, viewedSinceRun: true } : t
+        );
+        saveStoredTests(updatedTests);
+        return updatedTests;
+      });
+    }
+    navigate(`/clash-detection/test/${test.id}`, { state: { ...test, viewedSinceRun: true } });
   };
 
   const allSelected = filteredTests.length > 0 && filteredTests.every((t) => selectedTests.includes(t.id));
@@ -391,9 +454,7 @@ const ClashDetection = () => {
     <Box className="dashboard-page" sx={{ p: 0, backgroundColor: '#fff', minHeight: '100vh' }}>
       {/* Top bar */}
       <Box className="topbar">
-        <TextField select size="small" value="Project name" SelectProps={{ IconComponent: ExpandMoreIcon }} sx={{ width: 150 }}>
-          <MenuItem value="Project name">Project name</MenuItem>
-        </TextField>
+        <ProjectHeader />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, ml: 1 }}>
           <ClashIcon sx={{ fontSize: 16, color: '#536066' }} />
           <Link underline="always" color="text.primary" href="#" sx={{ fontSize: 12 }}>Clash Detection</Link>
@@ -403,38 +464,34 @@ const ClashDetection = () => {
       </Box>
 
       {/* Page heading */}
-      <Box className="canvas-heading" sx={{ borderBottom: '1px solid #c6cdd0 !important' }}>
+      <Box className="canvas-heading" sx={{ borderBottom: 'none' }}>
         <Typography variant="h6" sx={{ fontWeight: 500 }}>Clash Detection</Typography>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<GavelOutlinedIcon sx={{ fontSize: 16 }} />}
+          onClick={() => setSuppressionDrawerOpen(true)}
+          sx={{
+            height: 28,
+            px: 1.25,
+            borderColor: '#c6cdd0',
+            color: '#1c1f21',
+            fontSize: 12,
+            fontWeight: 600,
+            borderRadius: '3px',
+            backgroundColor: '#fff',
+            '& .MuiButton-startIcon': { mr: 0.75 },
+            '&:hover': {
+              borderColor: '#aab4b9',
+              backgroundColor: '#f8f9fa',
+            },
+          }}
+        >
+          Suppression rules library
+        </Button>
       </Box>
 
       <Box sx={{ display: 'flex', minHeight: 'calc(100vh - 101px)' }}>
-        {/* iModels panel */}
-        <Box sx={{ width: 176, flexShrink: 0, borderRight: '1px solid #c6cdd0', pt: 2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 700, px: 2, mb: 1 }}>iModels</Typography>
-          <List sx={{ p: 0 }}>
-            {filters.map((filter) => (
-              <ListItem key={filter} disablePadding>
-                <ListItemButton
-                  selected={selectedFilter === filter}
-                  onClick={() => setSelectedFilter(filter)}
-                  sx={{
-                    py: 0.75,
-                    px: 2,
-                    borderBottom: selectedFilter === filter ? '2px solid #087f6c' : '2px solid transparent',
-                    '&.Mui-selected': { backgroundColor: 'transparent' },
-                    '&:hover': { backgroundColor: '#f0f4f3' },
-                  }}
-                >
-                  <ListItemText
-                    primaryTypographyProps={{ fontSize: 13, fontWeight: selectedFilter === filter ? 600 : 400, noWrap: true }}
-                    primary={filter}
-                  />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-        </Box>
-
         {/* Main content */}
         <Box sx={{ flex: 1, p: 2, minWidth: 0 }}>
           {/* Toolbar */}
@@ -494,7 +551,7 @@ const ClashDetection = () => {
                   {visibleColumns.description && <TableCell sx={{ fontWeight: 700 }}>Description</TableCell>}
                   {visibleColumns.iModel && <TableCell sx={{ fontWeight: 700 }}>iModel</TableCell>}
                   {visibleColumns.active && <TableCell sx={{ fontWeight: 700 }} align="right">Active</TableCell>}
-                  {visibleColumns.total && <TableCell sx={{ fontWeight: 700 }} align="right">Total</TableCell>}
+                  {visibleColumns.total && <TableCell sx={{ fontWeight: 700 }} align="right">Resolved</TableCell>}
                   {visibleColumns.lastRun && <TableCell sx={{ fontWeight: 700 }}>Last run</TableCell>}
                   {visibleColumns.tag && <TableCell sx={{ fontWeight: 700 }}>Tag</TableCell>}
                   {visibleColumns.creationDate && <TableCell sx={{ fontWeight: 700 }}>Creation date</TableCell>}
@@ -513,14 +570,22 @@ const ClashDetection = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredTests.map((test) => {
+                {filteredTests.map((test, index) => {
                   const isRunning = runningTests.includes(test.id);
+                  const hasMultipleRuns = (test.runCount || 1) >= 2;
+                  const showDelta = hasMultipleRuns && !test.viewedSinceRun;
+                  const activeDelta = showDelta && test.prevActive != null
+                    ? Number(test.active) - Number(test.prevActive)
+                    : null;
+                  const resolvedDelta = showDelta && test.prevTotal != null
+                    ? Number(test.total) - Number(test.prevTotal)
+                    : null;
                   return (
                     <TableRow
                       key={test.id}
                       hover
                       selected={menuRowId === test.id}
-                      onClick={() => navigate(`/clash-detection/test/${test.id}`, { state: test })}
+                      onClick={() => handleRowClick(test)}
                       sx={{
                         cursor: 'pointer',
                         backgroundColor: selectedTests.includes(test.id) ? '#eef7f3' : 'transparent',
@@ -530,13 +595,40 @@ const ClashDetection = () => {
                       }}
                     >
                       <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox sx={checkboxSx} checked={selectedTests.includes(test.id)} onChange={() => handleToggleTest(test.id)} />
+                        <Checkbox
+                          sx={checkboxSx}
+                          checked={selectedTests.includes(test.id)}
+                          onClick={(e) => handleToggleTest(test.id, index, e)}
+                          onChange={() => {}}
+                        />
                       </TableCell>
                       {visibleColumns.name && <TableCell>{test.name}</TableCell>}
                       {visibleColumns.description && <TableCell>{test.description}</TableCell>}
                       {visibleColumns.iModel && <TableCell sx={{ maxWidth: 130 }}><Typography noWrap sx={{ fontSize: 13 }}>{test.iModel}</Typography></TableCell>}
-                      {visibleColumns.active && <TableCell align="right">{test.active}</TableCell>}
-                      {visibleColumns.total && <TableCell align="right">{test.total}</TableCell>}
+                      {visibleColumns.active && (
+                        <TableCell align="right">
+                          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                            <Typography sx={{ fontSize: 13 }}>{test.active}</Typography>
+                            {activeDelta !== null && (
+                              <Typography sx={{ fontSize: 11, color: activeDelta >= 0 ? '#c62839' : '#087f6c' }}>
+                                {activeDelta >= 0 ? `+${activeDelta}` : activeDelta}
+                              </Typography>
+                            )}
+                          </Box>
+                        </TableCell>
+                      )}
+                      {visibleColumns.total && (
+                        <TableCell align="right">
+                          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                            <Typography sx={{ fontSize: 13 }}>{test.total}</Typography>
+                            {resolvedDelta !== null && (
+                              <Typography sx={{ fontSize: 11, color: '#087f6c' }}>
+                                {resolvedDelta >= 0 ? `+${resolvedDelta}` : resolvedDelta}
+                              </Typography>
+                            )}
+                          </Box>
+                        </TableCell>
+                      )}
                       {visibleColumns.lastRun && <TableCell>{test.lastRun}</TableCell>}
                       {visibleColumns.tag && (
                         <TableCell>
@@ -667,7 +759,7 @@ const ClashDetection = () => {
               ['description', 'Description'],
               ['iModel', 'iModel'],
               ['active', 'Active clashes'],
-              ['total', 'Total clashes'],
+              ['total', 'Resolved'],
               ['lastRun', 'Last run'],
               ['tag', 'Tag'],
               ['creationDate', 'Creation date'],
@@ -1188,6 +1280,17 @@ const ClashDetection = () => {
           />
         </Box>
       </Box>
+
+      <SuppressionRulesDrawer
+        open={suppressionDrawerOpen}
+        onClose={() => setSuppressionDrawerOpen(false)}
+        rules={libraryRules}
+        availableRules={availableSuppressionRules}
+        testName="Suppression rules library"
+        onSaveRule={handleSaveLibraryRule}
+        onDeleteRule={handleDeleteLibraryRule}
+        libraryMode
+      />
     </Box>
   );
 };

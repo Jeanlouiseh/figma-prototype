@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Drawer,
   Box,
@@ -16,13 +16,15 @@ import {
   Dialog,
   LinearProgress,
   Divider,
+  InputAdornment,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
-import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
+import IosShareOutlinedIcon from '@mui/icons-material/IosShareOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
@@ -31,8 +33,6 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
-import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 
 // Gavel / hammer icon from the screenshot empty state
 const GavelIcon = (props) => (
@@ -49,35 +49,6 @@ const GavelIcon = (props) => (
   </SvgIcon>
 );
 
-// Import icon matching Screenshot 2
-const ImportActionIcon = (props) => (
-  <SvgIcon {...props} viewBox="0 0 24 24">
-    <path
-      d="M9.5 5.5H6.5A2 2 0 0 0 4.5 7.5v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path
-      d="M18.5 6c-3.5 0-6.5 2-6.5 7.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-    />
-    <path
-      d="M9 11l3 3 3-3"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </SvgIcon>
-);
-
 const SUPPRESS_BASED_OPTIONS = [
   'Model',
   'Category',
@@ -89,6 +60,7 @@ const SUPPRESS_BASED_OPTIONS = [
 ];
 
 const TARGET_OPTIONS = ['one element', 'both elements'];
+const NAME_MATCH_OPTIONS = ['is exactly', 'matches'];
 
 const MODEL_NAME_OPTIONS = [
   'Ref-11, I-95_CL_Corridor_Pavt.dgn, Default-3D',
@@ -363,6 +335,7 @@ const SuppressionRulesDrawer = ({
   onClose,
   rules = [],
   testName = 'AR vs PH',
+  availableRules = [],
   onSaveRule,
   onDeleteRule,
   initialCreateRule = null,
@@ -370,7 +343,9 @@ const SuppressionRulesDrawer = ({
   onUndoChanges,
   onPreviewResults,
   hasPendingChanges = false,
+  libraryMode = false,
 }) => {
+  const deviceImportInputRef = useRef(null);
   const [isCreatingRule, setIsCreatingRule] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -386,6 +361,10 @@ const SuppressionRulesDrawer = ({
       setHasUnsavedChanges(Boolean(initialCreateRule) || hasPendingChanges);
     } else {
       setHasUnsavedChanges(false);
+      setIsSearchOpen(false);
+      setSearchTerm('');
+      setSelectedCardIds([]);
+      setLastSelectedCardIndex(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialCreateRule, hasPendingChanges]);
@@ -399,6 +378,8 @@ const SuppressionRulesDrawer = ({
   const [targetScope, setTargetScope] = useState('one element');
   const [attribute1, setAttribute1] = useState('Pipes');
   const [attribute2, setAttribute2] = useState('Walls');
+  const [nameMatchOperator1, setNameMatchOperator1] = useState('is exactly');
+  const [nameMatchOperator2, setNameMatchOperator2] = useState('matches');
   const [isDualCondition, setIsDualCondition] = useState(true);
 
   // Condition fields for Property
@@ -428,10 +409,13 @@ const SuppressionRulesDrawer = ({
   const [isImportedRule, setIsImportedRule] = useState(false);
   const [importedFromTest, setImportedFromTest] = useState('AR vs PH');
   const [importMenuAnchorEl, setImportMenuAnchorEl] = useState(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCardIds, setSelectedCardIds] = useState([]);
+  const [lastSelectedCardIndex, setLastSelectedCardIndex] = useState(null);
 
   // Import Dialog State
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [selectedImportTest, setSelectedImportTest] = useState('');
   const [selectedRuleIds, setSelectedRuleIds] = useState([]);
   const [isImportLoading, setIsImportLoading] = useState(false);
 
@@ -449,6 +433,8 @@ const SuppressionRulesDrawer = ({
       setTargetScope(initialCreateRule.targetScope || 'one element');
       setAttribute1(initialCreateRule.attribute1 || 'Ref-11, I-95_CL_Corridor_Pavt.dgn, Default-3D');
       setAttribute2(initialCreateRule.attribute2 || 'Walls');
+      setNameMatchOperator1(initialCreateRule.nameMatchOperator1 || 'is exactly');
+      setNameMatchOperator2(initialCreateRule.nameMatchOperator2 || 'matches');
       setIsDualCondition(Boolean(initialCreateRule.isDualCondition));
       setProperty1(initialCreateRule.property1 || '@Design');
       setPropertyVal1(initialCreateRule.propertyVal1 || '36');
@@ -477,8 +463,10 @@ const SuppressionRulesDrawer = ({
     );
     setSuppressBasedOn('Category');
     setTargetScope('one element');
-    setAttribute1('BBoxhigh');
-    setAttribute2('BBoxlow');
+    setAttribute1(MODEL_NAME_OPTIONS[0]);
+    setAttribute2(MODEL_NAME_OPTIONS[1] || MODEL_NAME_OPTIONS[0]);
+    setNameMatchOperator1('is exactly');
+    setNameMatchOperator2('matches');
     setIsDualCondition(true);
     setProperty1('BBoxhigh');
     setPropertyVal1('34');
@@ -503,6 +491,18 @@ const SuppressionRulesDrawer = ({
     setEditingRuleId(null);
   };
 
+  const handleSuppressBasedOnChange = (nextSuppressBasedOn) => {
+    setSuppressBasedOn(nextSuppressBasedOn);
+    setIsDualCondition(true);
+
+    if (nextSuppressBasedOn === 'Model' || nextSuppressBasedOn === 'Category') {
+      setAttribute1(MODEL_NAME_OPTIONS[0]);
+      setAttribute2(MODEL_NAME_OPTIONS[1] || MODEL_NAME_OPTIONS[0]);
+      setNameMatchOperator1('is exactly');
+      setNameMatchOperator2('matches');
+    }
+  };
+
   const handleSave = () => {
     const newRule = {
       id: editingRuleId || Date.now(),
@@ -512,6 +512,8 @@ const SuppressionRulesDrawer = ({
       targetScope,
       attribute1,
       attribute2,
+      nameMatchOperator1,
+      nameMatchOperator2,
       isDualCondition,
       property1,
       propertyVal1,
@@ -564,16 +566,56 @@ const SuppressionRulesDrawer = ({
     if (onSaveAndApply) onSaveAndApply();
   };
 
+  const importableRules =
+    availableRules.length > 0
+      ? availableRules
+      : Object.entries(MOCK_TEST_RULES).flatMap(([sourceTestName, testRules]) =>
+          testRules.map((rule) => ({
+            importId: `${sourceTestName}:${rule.id}`,
+            sourceTestName,
+            rule,
+          }))
+        );
+
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+  const filteredRules = normalizedSearchTerm
+    ? rules.filter((rule) =>
+        [
+          rule.name,
+          rule.description,
+          rule.suppressBasedOn,
+          rule.targetScope,
+          rule.attribute1,
+          rule.attribute2,
+          rule.nameMatchOperator1,
+          rule.nameMatchOperator2,
+          rule.property1,
+          rule.propertyVal1,
+          rule.property2,
+          rule.propertyVal2,
+          rule.class1,
+          rule.class2,
+          rule.selectedGroup,
+          rule.importedFrom,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedSearchTerm))
+      )
+    : rules;
+
   const handleOpenImportDialog = () => {
     setImportMenuAnchorEl(null);
-    setSelectedImportTest('');
     setSelectedRuleIds([]);
     setImportDialogOpen(true);
   };
 
+  const handleImportFromDevice = () => {
+    setImportMenuAnchorEl(null);
+    deviceImportInputRef.current?.click();
+  };
+
   const handleCloseImportDialog = () => {
     setImportDialogOpen(false);
-    setSelectedImportTest('');
     setSelectedRuleIds([]);
   };
 
@@ -583,19 +625,26 @@ const SuppressionRulesDrawer = ({
     );
   };
 
+  const handleSelectAllImportRules = () => {
+    setSelectedRuleIds(importableRules.map((item) => item.importId));
+  };
+
+  const handleDeselectAllImportRules = () => {
+    setSelectedRuleIds([]);
+  };
+
   const handleConfirmImport = () => {
-    if (!selectedImportTest || selectedRuleIds.length === 0) return;
+    if (selectedRuleIds.length === 0) return;
     setImportDialogOpen(false);
     setIsImportLoading(true);
 
-    const availableRules = MOCK_TEST_RULES[selectedImportTest] || [];
-    const rulesToImport = availableRules
-      .filter((r) => selectedRuleIds.includes(r.id))
+    const rulesToImport = importableRules
+      .filter((r) => selectedRuleIds.includes(r.importId))
       .map((r, idx) => ({
-        ...r,
+        ...r.rule,
         id: Date.now() + idx + Math.random(),
         isImported: true,
-        importedFrom: selectedImportTest,
+        importedFrom: r.sourceTestName,
       }));
 
     setTimeout(() => {
@@ -615,6 +664,21 @@ const SuppressionRulesDrawer = ({
     setMenuRule(rule);
   };
 
+  const handleRuleCardClick = (rule, index, event) => {
+    if (event.shiftKey && lastSelectedCardIndex !== null) {
+      const start = Math.min(lastSelectedCardIndex, index);
+      const end = Math.max(lastSelectedCardIndex, index);
+      const rangeIds = filteredRules.slice(start, end + 1).map((item) => item.id);
+      setSelectedCardIds((prev) => Array.from(new Set([...prev, ...rangeIds])));
+      return;
+    }
+
+    setSelectedCardIds((prev) =>
+      prev.includes(rule.id) ? prev.filter((id) => id !== rule.id) : [...prev, rule.id]
+    );
+    setLastSelectedCardIndex(index);
+  };
+
   const handleCardMenuClose = () => {
     setMenuAnchorEl(null);
     setMenuRule(null);
@@ -629,6 +693,8 @@ const SuppressionRulesDrawer = ({
     setTargetScope(menuRule.targetScope || 'one element');
     setAttribute1(menuRule.attribute1 || 'Pipes');
     setAttribute2(menuRule.attribute2 || 'Walls');
+    setNameMatchOperator1(menuRule.nameMatchOperator1 || 'is exactly');
+    setNameMatchOperator2(menuRule.nameMatchOperator2 || 'matches');
     setIsDualCondition(menuRule.isDualCondition !== false);
     setProperty1(menuRule.property1 || '@Design');
     setPropertyVal1(menuRule.propertyVal1 || '36');
@@ -649,20 +715,6 @@ const SuppressionRulesDrawer = ({
     handleCardMenuClose();
   };
 
-  const handleToggleDisableRule = () => {
-    if (!menuRule) return;
-    const isCurrentlyDisabled = Boolean(menuRule.disabled);
-    const updatedRule = {
-      ...menuRule,
-      disabled: !isCurrentlyDisabled,
-    };
-    if (onSaveRule) {
-      onSaveRule(updatedRule);
-    }
-    setHasUnsavedChanges(true);
-    handleCardMenuClose();
-  };
-
   const handleExportRuleCsv = () => {
     if (!menuRule) return;
     const ruleNameClean = (menuRule.name || 'suppression_rule').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -670,9 +722,9 @@ const SuppressionRulesDrawer = ({
 
     let conditionSummary = '';
     if (menuRule.suppressBasedOn === 'Model') {
-      conditionSummary = `Model: ${menuRule.attribute1 || 'Pipes'}`;
+      conditionSummary = `Model name ${menuRule.nameMatchOperator1 || 'is exactly'} ${menuRule.attribute1 || 'Pipes'}`;
     } else if (menuRule.suppressBasedOn === 'Category') {
-      conditionSummary = `Category: ${menuRule.attribute1 || 'Pipes'} vs ${menuRule.attribute2 || 'Walls'}`;
+      conditionSummary = `Category name ${menuRule.nameMatchOperator1 || 'is exactly'} ${menuRule.attribute1 || 'Pipes'}`;
     } else if (menuRule.suppressBasedOn === 'Property') {
       conditionSummary = `Property: ${menuRule.property1 || '@Design'}=${menuRule.propertyVal1 || '36'}`;
     } else if (menuRule.suppressBasedOn === 'ECSQL expression') {
@@ -715,13 +767,60 @@ const SuppressionRulesDrawer = ({
 
   // Render the sentence builder form dynamically matching each column in the matrix screenshot
   const renderSentenceBuilder = () => {
+    const compactSelectSx = {
+      '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 },
+      '& .MuiSelect-select': {
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        pr: '28px !important',
+      },
+    };
+    const targetScopeSelectSx = { width: 125, ...compactSelectSx };
+    const nameMatchSelectSx = { width: 112, ...compactSelectSx };
+    const attributeSelectSx = { width: 128, ...compactSelectSx };
+    const fullWidthAttributeSelectSx = { width: '100%', ...compactSelectSx };
+    const highlightedAttributeSelectSx = {
+      ...attributeSelectSx,
+      '& .MuiOutlinedInput-root': {
+        ...attributeSelectSx['& .MuiOutlinedInput-root'],
+        '& fieldset': { borderColor: '#087f6c' },
+      },
+    };
+    const highlightedFullWidthAttributeSelectSx = {
+      ...fullWidthAttributeSelectSx,
+      '& .MuiOutlinedInput-root': {
+        ...fullWidthAttributeSelectSx['& .MuiOutlinedInput-root'],
+        '& fieldset': { borderColor: '#087f6c' },
+      },
+    };
+    const wildcardHelperNote = (
+      <Typography sx={{ fontSize: 12, color: '#657075', lineHeight: 1.35, whiteSpace: 'normal' }}>
+        Use '_' for one character; '%' for multiple.
+      </Typography>
+    );
+    const getAttributeWrapperSx = (operator) => ({
+      position: 'relative',
+      width: operator === 'matches' ? 'auto' : attributeSelectSx.width,
+      flex: operator === 'matches' ? '1 1 220px' : '0 0 auto',
+      minWidth: operator === 'matches' ? 220 : attributeSelectSx.width,
+      maxWidth: '100%',
+      height: 34,
+    });
+    const helperNoteSx = {
+      position: 'absolute',
+      top: 40,
+      left: 0,
+      right: 0,
+    };
+
     switch (suppressBasedOn) {
       case 'Model': {
         const isBoth = targetScope === 'both elements';
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75, mb: 3 }}>
             {/* Line 1 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap', pb: nameMatchOperator1 === 'matches' ? 3.5 : 0 }}>
               <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#1c1f21' }}>If</Typography>
               <TextField
                 select
@@ -729,7 +828,7 @@ const SuppressionRulesDrawer = ({
                 value={targetScope}
                 onChange={(e) => setTargetScope(e.target.value)}
                 SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                sx={{ width: 160, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+                sx={targetScopeSelectSx}
               >
                 {TARGET_OPTIONS.map((t) => (
                   <MenuItem key={t} value={t} sx={{ fontSize: 13 }}>{t}</MenuItem>
@@ -743,28 +842,37 @@ const SuppressionRulesDrawer = ({
               ) : (
                 <>
                   <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                    belongs to a model named
+                    belongs to a model with a name that
                   </Typography>
                   <TextField
                     select
                     size="small"
-                    value={attribute1}
-                    onChange={(e) => setAttribute1(e.target.value)}
+                    value={nameMatchOperator1}
+                    onChange={(e) => setNameMatchOperator1(e.target.value)}
                     SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                    sx={{
-                      maxWidth: 280,
-                      minWidth: 170,
-                      '& .MuiOutlinedInput-root': {
-                        height: 34,
-                        fontSize: 13,
-                        '& fieldset': { borderColor: '#c2c9cd' },
-                      },
-                    }}
+                    sx={nameMatchSelectSx}
                   >
-                    {MODEL_NAME_OPTIONS.map((m) => (
-                      <MenuItem key={m} value={m} sx={{ fontSize: 13 }}>{m}</MenuItem>
+                    {NAME_MATCH_OPTIONS.map((option) => (
+                      <MenuItem key={option} value={option} sx={{ fontSize: 13 }}>{option}</MenuItem>
                     ))}
                   </TextField>
+                  <Box sx={getAttributeWrapperSx(nameMatchOperator1)}>
+                    <TextField
+                      select
+                      size="small"
+                      value={attribute1}
+                      onChange={(e) => setAttribute1(e.target.value)}
+                      SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
+                      sx={nameMatchOperator1 === 'matches' ? fullWidthAttributeSelectSx : attributeSelectSx}
+                    >
+                      {MODEL_NAME_OPTIONS.map((m) => (
+                        <MenuItem key={m} value={m} sx={{ fontSize: 13 }}>{m}</MenuItem>
+                      ))}
+                    </TextField>
+                    {nameMatchOperator1 === 'matches' && (
+                      <Box sx={helperNoteSx}>{wildcardHelperNote}</Box>
+                    )}
+                  </Box>
                   {!isDualCondition && (
                     <IconButton
                       size="small"
@@ -780,22 +888,39 @@ const SuppressionRulesDrawer = ({
 
             {/* Line 2 (Dual Condition for Model) */}
             {!isBoth && isDualCondition && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap', pb: nameMatchOperator1 === 'matches' ? 3.5 : 0 }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                  and the other belongs to a model named
+                  and the other has a model named that
                 </Typography>
                 <TextField
                   select
                   size="small"
-                  value={attribute2}
-                  onChange={(e) => setAttribute2(e.target.value)}
+                  value={nameMatchOperator2}
+                  onChange={(e) => setNameMatchOperator2(e.target.value)}
                   SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                  sx={{ width: 170, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+                  sx={nameMatchSelectSx}
                 >
-                  {MODEL_NAME_OPTIONS.map((m) => (
-                    <MenuItem key={m} value={m} sx={{ fontSize: 13 }}>{m}</MenuItem>
+                  {NAME_MATCH_OPTIONS.map((option) => (
+                    <MenuItem key={option} value={option} sx={{ fontSize: 13 }}>{option}</MenuItem>
                   ))}
                 </TextField>
+                <Box sx={getAttributeWrapperSx(nameMatchOperator2)}>
+                  <TextField
+                    select
+                    size="small"
+                    value={attribute2}
+                    onChange={(e) => setAttribute2(e.target.value)}
+                    SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
+                    sx={nameMatchOperator2 === 'matches' ? fullWidthAttributeSelectSx : attributeSelectSx}
+                  >
+                    {MODEL_NAME_OPTIONS.map((m) => (
+                      <MenuItem key={m} value={m} sx={{ fontSize: 13 }}>{m}</MenuItem>
+                    ))}
+                  </TextField>
+                  {nameMatchOperator2 === 'matches' && (
+                    <Box sx={helperNoteSx}>{wildcardHelperNote}</Box>
+                  )}
+                </Box>
                 <IconButton
                   size="small"
                   onClick={() => setIsDualCondition(false)}
@@ -814,7 +939,7 @@ const SuppressionRulesDrawer = ({
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75, mb: 3 }}>
             {/* Line 1 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap', mt: nameMatchOperator1 === 'matches' ? 2 : 0 }}>
               <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#1c1f21' }}>If</Typography>
               <TextField
                 select
@@ -822,7 +947,7 @@ const SuppressionRulesDrawer = ({
                 value={targetScope}
                 onChange={(e) => setTargetScope(e.target.value)}
                 SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                sx={{ width: 160, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+                sx={targetScopeSelectSx}
               >
                 {TARGET_OPTIONS.map((t) => (
                   <MenuItem key={t} value={t} sx={{ fontSize: 13 }}>{t}</MenuItem>
@@ -836,20 +961,37 @@ const SuppressionRulesDrawer = ({
               ) : (
                 <>
                   <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                    has a category matching
+                    has a category name that
                   </Typography>
                   <TextField
                     select
                     size="small"
-                    value={attribute1}
-                    onChange={(e) => setAttribute1(e.target.value)}
+                    value={nameMatchOperator1}
+                    onChange={(e) => setNameMatchOperator1(e.target.value)}
                     SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                    sx={{ width: 170, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13, '& fieldset': { borderColor: '#087f6c' } } }}
+                    sx={nameMatchSelectSx}
                   >
-                    {MODEL_NAME_OPTIONS.map((m) => (
-                      <MenuItem key={m} value={m} sx={{ fontSize: 13 }}>{m}</MenuItem>
+                    {NAME_MATCH_OPTIONS.map((option) => (
+                      <MenuItem key={option} value={option} sx={{ fontSize: 13 }}>{option}</MenuItem>
                     ))}
                   </TextField>
+                  <Box sx={getAttributeWrapperSx(nameMatchOperator1)}>
+                    <TextField
+                      select
+                      size="small"
+                      value={attribute1}
+                      onChange={(e) => setAttribute1(e.target.value)}
+                      SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
+                      sx={nameMatchOperator1 === 'matches' ? highlightedFullWidthAttributeSelectSx : highlightedAttributeSelectSx}
+                    >
+                      {MODEL_NAME_OPTIONS.map((m) => (
+                        <MenuItem key={m} value={m} sx={{ fontSize: 13 }}>{m}</MenuItem>
+                      ))}
+                    </TextField>
+                    {nameMatchOperator1 === 'matches' && (
+                      <Box sx={helperNoteSx}>{wildcardHelperNote}</Box>
+                    )}
+                  </Box>
                   {!isDualCondition && (
                     <IconButton
                       size="small"
@@ -865,22 +1007,39 @@ const SuppressionRulesDrawer = ({
 
             {/* Line 2 (Dual Condition for Category) */}
             {!isBoth && isDualCondition && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap', mt: nameMatchOperator1 === 'matches' ? 2 : 0 }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                  and the other has a category matching
+                  and the other has a category name that
                 </Typography>
                 <TextField
                   select
                   size="small"
-                  value={attribute2}
-                  onChange={(e) => setAttribute2(e.target.value)}
+                  value={nameMatchOperator2}
+                  onChange={(e) => setNameMatchOperator2(e.target.value)}
                   SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                  sx={{ width: 170, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+                  sx={nameMatchSelectSx}
                 >
-                  {MODEL_NAME_OPTIONS.map((m) => (
-                    <MenuItem key={m} value={m} sx={{ fontSize: 13 }}>{m}</MenuItem>
+                  {NAME_MATCH_OPTIONS.map((option) => (
+                    <MenuItem key={option} value={option} sx={{ fontSize: 13 }}>{option}</MenuItem>
                   ))}
                 </TextField>
+                <Box sx={getAttributeWrapperSx(nameMatchOperator2)}>
+                  <TextField
+                    select
+                    size="small"
+                    value={attribute2}
+                    onChange={(e) => setAttribute2(e.target.value)}
+                    SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
+                    sx={nameMatchOperator2 === 'matches' ? fullWidthAttributeSelectSx : attributeSelectSx}
+                  >
+                    {MODEL_NAME_OPTIONS.map((m) => (
+                      <MenuItem key={m} value={m} sx={{ fontSize: 13 }}>{m}</MenuItem>
+                    ))}
+                  </TextField>
+                  {nameMatchOperator2 === 'matches' && (
+                    <Box sx={helperNoteSx}>{wildcardHelperNote}</Box>
+                  )}
+                </Box>
                 <IconButton
                   size="small"
                   onClick={() => setIsDualCondition(false)}
@@ -1218,11 +1377,13 @@ const SuppressionRulesDrawer = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
             <Typography sx={{ fontSize: 13, color: '#4a555b' }}>Suppress if</Typography>
             <Pill>{rule.targetScope || 'one element'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>belongs to a model named</Typography>
+            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>belongs to a model with a name that</Typography>
+            <Pill>{rule.nameMatchOperator1 || 'is exactly'}</Pill>
             <Pill>{rule.attribute1 || 'Pipes'}</Pill>
             {rule.isDualCondition && (
               <>
-                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other belongs to a model named</Typography>
+                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other has a model named that</Typography>
+                <Pill>{rule.nameMatchOperator2 || 'matches'}</Pill>
                 <Pill>{rule.attribute2 || 'Walls'}</Pill>
               </>
             )}
@@ -1244,11 +1405,13 @@ const SuppressionRulesDrawer = ({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
             <Typography sx={{ fontSize: 13, color: '#4a555b' }}>Suppress if</Typography>
             <Pill>{rule.targetScope || 'one element'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>has a category matching</Typography>
+            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>has a category name that</Typography>
+            <Pill>{rule.nameMatchOperator1 || 'is exactly'}</Pill>
             <Pill>{rule.attribute1 || 'Pipes'}</Pill>
             {rule.isDualCondition && (
               <>
-                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other has a category matching</Typography>
+                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other has a category name that</Typography>
+                <Pill>{rule.nameMatchOperator2 || 'matches'}</Pill>
                 <Pill>{rule.attribute2 || 'Walls'}</Pill>
               </>
             )}
@@ -1392,10 +1555,12 @@ const SuppressionRulesDrawer = ({
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2.5 }}>
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 600, color: '#1c1f21', letterSpacing: '-0.02em' }}>
-              Suppression rules
+              {libraryMode ? 'Suppression rules library' : 'Suppression rules'}
             </Typography>
             <Typography sx={{ fontSize: 13, color: '#657075', mt: 0.5 }}>
-              {rules.length} applied
+              {libraryMode
+                ? `${rules.length} ${rules.length === 1 ? 'rule' : 'rules'}`
+                : `${rules.length} applied`}
             </Typography>
           </Box>
 
@@ -1419,7 +1584,7 @@ const SuppressionRulesDrawer = ({
         </Box>
 
       {/* Action Toolbar */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: isSearchOpen ? 1.25 : 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
           <Button
             variant="contained"
@@ -1443,8 +1608,8 @@ const SuppressionRulesDrawer = ({
           <Button
             variant="outlined"
             size="small"
-            onClick={(e) => setImportMenuAnchorEl(e.currentTarget)}
-            endIcon={<KeyboardArrowDownIcon sx={{ fontSize: 16 }} />}
+            onClick={libraryMode ? handleImportFromDevice : (e) => setImportMenuAnchorEl(e.currentTarget)}
+            endIcon={libraryMode ? null : <KeyboardArrowDownIcon sx={{ fontSize: 16 }} />}
             sx={{
               textTransform: 'none',
               color: '#344046',
@@ -1460,78 +1625,106 @@ const SuppressionRulesDrawer = ({
           >
             Import rules
           </Button>
+          <input
+            ref={deviceImportInputRef}
+            type="file"
+            accept=".csv,.json"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              e.target.value = '';
+            }}
+          />
 
           {/* Import Rules Dropdown Menu */}
-          <Menu
-            anchorEl={importMenuAnchorEl}
-            open={Boolean(importMenuAnchorEl)}
-            onClose={() => setImportMenuAnchorEl(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-            slotProps={{
-              paper: {
-                sx: {
-                  minWidth: 170,
-                  borderRadius: '4px',
-                  border: '1px solid #c2c9cd',
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
-                  py: 0.5,
+          {!libraryMode && (
+            <Menu
+              anchorEl={importMenuAnchorEl}
+              open={Boolean(importMenuAnchorEl)}
+              onClose={() => setImportMenuAnchorEl(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+              slotProps={{
+                paper: {
+                  sx: {
+                    minWidth: 170,
+                    borderRadius: '4px',
+                    border: '1px solid #c2c9cd',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+                    py: 0.5,
+                  },
                 },
+              }}
+            >
+              <MenuItem
+                onClick={handleImportFromDevice}
+                sx={{
+                  fontSize: 13,
+                  color: '#344046',
+                  py: 0.75,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.25,
+                  '&:hover': { backgroundColor: '#f5f7f8' },
+                }}
+              >
+                <InsertDriveFileOutlinedIcon sx={{ fontSize: 16, color: '#536066' }} />
+                From file
+              </MenuItem>
+              <MenuItem
+                onClick={handleOpenImportDialog}
+                sx={{
+                  fontSize: 13,
+                  color: '#344046',
+                  py: 0.75,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.25,
+                  '&:hover': { backgroundColor: '#f5f7f8' },
+                }}
+              >
+                <TableChartOutlinedIcon sx={{ fontSize: 16, color: '#536066' }} />
+                From library
+              </MenuItem>
+            </Menu>
+          )}
+
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={selectedCardIds.length === 0}
+            sx={{
+              textTransform: 'none',
+              color: '#344046',
+              borderColor: '#e0e4e6',
+              backgroundColor: '#f5f7f8',
+              borderRadius: '4px',
+              fontSize: 13,
+              fontWeight: 500,
+              px: 1.5,
+              py: 0.6,
+              '&:hover': { backgroundColor: '#eef1f3', borderColor: '#c2c9cd' },
+              '&.Mui-disabled': {
+                color: '#9aa3a8',
+                borderColor: '#e0e4e6',
+                backgroundColor: '#f5f7f8',
               },
             }}
           >
-            <MenuItem
-              onClick={() => {
-                setImportMenuAnchorEl(null);
-              }}
-              sx={{
-                fontSize: 13,
-                color: '#344046',
-                py: 0.75,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.25,
-                '&:hover': { backgroundColor: '#f5f7f8' },
-              }}
-            >
-              <InsertDriveFileOutlinedIcon sx={{ fontSize: 16, color: '#536066' }} />
-              From file
-            </MenuItem>
-            <MenuItem
-              onClick={handleOpenImportDialog}
-              sx={{
-                fontSize: 13,
-                color: '#344046',
-                py: 0.75,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1.25,
-                '&:hover': { backgroundColor: '#f5f7f8' },
-              }}
-            >
-              <TableChartOutlinedIcon sx={{ fontSize: 16, color: '#536066' }} />
-              From another test
-            </MenuItem>
-          </Menu>
-
-          <IconButton
-            size="small"
-            sx={{
-              border: '1px solid #e0e4e6',
-              backgroundColor: '#f5f7f8',
-              borderRadius: '4px',
-              p: 0.7,
-              color: '#536066',
-              '&:hover': { backgroundColor: '#eef1f3' },
-            }}
-          >
-            <FileUploadOutlinedIcon sx={{ fontSize: 18 }} />
-          </IconButton>
+            Export rules
+          </Button>
         </Box>
 
         {/* Right utility icons */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <IconButton size="small" sx={{ color: '#657075' }}>
+          <IconButton
+            size="small"
+            onClick={() => setIsSearchOpen((current) => !current)}
+            sx={{
+              color: isSearchOpen ? '#087f6c' : '#657075',
+              backgroundColor: isSearchOpen ? '#e6f3ef' : 'transparent',
+              '&:hover': { backgroundColor: isSearchOpen ? '#d8ebe5' : 'rgba(0, 0, 0, 0.04)' },
+            }}
+          >
             <SearchIcon sx={{ fontSize: 20 }} />
           </IconButton>
           <IconButton size="small" sx={{ color: '#657075' }}>
@@ -1542,6 +1735,36 @@ const SuppressionRulesDrawer = ({
           </IconButton>
         </Box>
       </Box>
+
+      {isSearchOpen && (
+        <TextField
+          autoFocus
+          fullWidth
+          size="small"
+          placeholder="Find rules"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ fontSize: 18, color: '#536066' }} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            mb: 2,
+            '& .MuiOutlinedInput-root': {
+              height: 34,
+              fontSize: 13,
+              borderRadius: '4px',
+              backgroundColor: '#fff',
+              '& fieldset': { borderColor: '#8a9499' },
+              '&:hover fieldset': { borderColor: '#657075' },
+              '&.Mui-focused fieldset': { borderColor: '#536066', borderWidth: 1 },
+            },
+          }}
+        />
+      )}
 
       {/* Loading Bar & Indicator during Rule Import (Screenshot 5) */}
       {isImportLoading && (
@@ -1649,10 +1872,7 @@ const SuppressionRulesDrawer = ({
               size="small"
               fullWidth
               value={suppressBasedOn}
-              onChange={(e) => {
-                setSuppressBasedOn(e.target.value);
-                setIsDualCondition(true);
-              }}
+              onChange={(e) => handleSuppressBasedOnChange(e.target.value)}
               SelectProps={{
                 IconComponent: KeyboardArrowDownIcon,
               }}
@@ -1758,11 +1978,28 @@ const SuppressionRulesDrawer = ({
             Create a rule
           </Button>
         </Box>
+      ) : filteredRules.length === 0 && !isCreatingRule ? (
+        <Box
+          sx={{
+            border: '1px solid #c2c9cd',
+            borderRadius: '8px',
+            p: 3,
+            textAlign: 'center',
+            color: '#657075',
+            backgroundColor: '#fff',
+          }}
+        >
+          <Typography sx={{ fontWeight: 600, fontSize: 15, color: '#1c1f21', mb: 0.5 }}>
+            No rules found
+          </Typography>
+          <Typography sx={{ fontSize: 13 }}>
+            Try a different search term.
+          </Typography>
+        </Box>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {rules.map((rule) => {
-            const isImported = Boolean(rule.isImported || rule.importedFrom);
-            const sourceTestName = rule.importedFrom || rule.testName || testName || 'AR vs PH';
+          {filteredRules.map((rule, index) => {
+            const isSelected = selectedCardIds.includes(rule.id);
             const ruleDescription =
               rule.description ||
               'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.';
@@ -1770,13 +2007,19 @@ const SuppressionRulesDrawer = ({
               <Paper
                 key={rule.id}
                 elevation={0}
+                onClick={(e) => handleRuleCardClick(rule, index, e)}
                 sx={{
-                  border: '1px solid #c2c9cd',
+                  border: isSelected ? '1.5px solid #087f6c' : '1px solid #c2c9cd',
                   borderRadius: '8px',
                   p: 2.5,
-                  backgroundColor: rule.disabled ? '#f6f8f9' : '#edf1f3',
+                  backgroundColor: isSelected ? '#cfe7df' : (rule.disabled ? '#f6f8f9' : '#edf1f3'),
+                  cursor: 'pointer',
                   opacity: rule.disabled ? 0.65 : 1,
                   transition: 'all 0.2s ease',
+                  '&:hover': {
+                    borderColor: isSelected ? '#087f6c' : '#8a9499',
+                    backgroundColor: isSelected ? '#c7e2d9' : (rule.disabled ? '#f6f8f9' : '#e6ecef'),
+                  },
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 0.5 }}>
@@ -1810,39 +2053,7 @@ const SuppressionRulesDrawer = ({
                   </Box>
 
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    {/* Display import icon ONLY if the rule was imported */}
-                    {isImported && (
-                      <Tooltip
-                        arrow
-                        placement="top"
-                        title={`Imported from ${sourceTestName}`}
-                        slotProps={{
-                          tooltip: {
-                            sx: {
-                              bgcolor: '#161c20',
-                              color: '#fff',
-                              fontSize: '12px',
-                              fontWeight: 400,
-                              px: 1.5,
-                              py: 0.75,
-                              borderRadius: '4px',
-                              boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
-                            },
-                          },
-                          arrow: {
-                            sx: {
-                              color: '#161c20',
-                            },
-                          },
-                        }}
-                      >
-                        <IconButton size="small" sx={{ color: '#455a64', p: 0.5 }}>
-                          <ImportActionIcon sx={{ fontSize: 18 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-
-                    {/* Question mark icon displaying description on hover */}
+                    {/* Information icon displaying description on hover */}
                     <Tooltip
                       arrow
                       placement="top"
@@ -1870,7 +2081,7 @@ const SuppressionRulesDrawer = ({
                       }}
                     >
                       <IconButton size="small" sx={{ color: '#455a64', p: 0.5 }}>
-                        <HelpOutlineIcon sx={{ fontSize: 18 }} />
+                        <InfoOutlinedIcon sx={{ fontSize: 18 }} />
                       </IconButton>
                     </Tooltip>
 
@@ -1910,28 +2121,6 @@ const SuppressionRulesDrawer = ({
         }}
       >
         <MenuItem
-          onClick={handleToggleDisableRule}
-          sx={{
-            fontSize: 13,
-            py: 0.85,
-            px: 1.5,
-            color: '#1c1f21',
-            '&:hover': { backgroundColor: '#f0f3f5' },
-          }}
-        >
-          <ListItemIcon sx={{ color: '#2c3437', minWidth: 28 }}>
-            {menuRule?.disabled ? (
-              <VisibilityOutlinedIcon sx={{ fontSize: 18 }} />
-            ) : (
-              <VisibilityOffOutlinedIcon sx={{ fontSize: 18 }} />
-            )}
-          </ListItemIcon>
-          {menuRule?.disabled ? 'Enable rule' : 'Disable rule'}
-        </MenuItem>
-
-        <Divider sx={{ my: 0.25, borderColor: '#e4e7e9' }} />
-
-        <MenuItem
           onClick={handleExportRuleCsv}
           sx={{
             fontSize: 13,
@@ -1942,7 +2131,7 @@ const SuppressionRulesDrawer = ({
           }}
         >
           <ListItemIcon sx={{ color: '#2c3437', minWidth: 28 }}>
-            <FileUploadOutlinedIcon sx={{ fontSize: 18 }} />
+            <IosShareOutlinedIcon sx={{ fontSize: 18 }} />
           </ListItemIcon>
           Export rule as .csv
         </MenuItem>
@@ -2024,65 +2213,50 @@ const SuppressionRulesDrawer = ({
               mb: 2.25,
             }}
           >
-            Import suppression rules from test
+            Import rules from library
           </Typography>
 
-          {/* Test Selector */}
-          <Box sx={{ mb: 1.5 }}>
-            <Typography sx={{ fontSize: 12, color: '#536066', fontWeight: 500, mb: 0.5 }}>
-              Test
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25 }}>
+            <Typography sx={{ fontSize: 13, color: '#657075' }}>
+              {selectedRuleIds.length} of {importableRules.length} selected
             </Typography>
-            <TextField
-              select
-              size="small"
-              fullWidth
-              value={selectedImportTest}
-              onChange={(e) => {
-                setSelectedImportTest(e.target.value);
-                setSelectedRuleIds([]);
-              }}
-              SelectProps={{
-                IconComponent: KeyboardArrowDownIcon,
-                displayEmpty: true,
-                renderValue: (val) => {
-                  if (!val) {
-                    return (
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <SearchIcon sx={{ fontSize: 18, color: '#8a9296' }} />
-                        <Typography sx={{ fontSize: 13, color: '#8a9296' }}>Find a test</Typography>
-                      </Box>
-                    );
-                  }
-                  return (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <SearchIcon sx={{ fontSize: 18, color: '#536066' }} />
-                      <Typography sx={{ fontSize: 13, color: '#1c1f21' }}>{val}</Typography>
-                    </Box>
-                  );
-                },
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  height: 36,
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Button
+                size="small"
+                onClick={handleSelectAllImportRules}
+                disabled={importableRules.length === 0 || selectedRuleIds.length === importableRules.length}
+                sx={{
+                  minWidth: 'auto',
+                  p: 0,
+                  textTransform: 'none',
+                  color: '#087f6c',
                   fontSize: 13,
-                  borderRadius: '4px',
-                  backgroundColor: '#fff',
-                  '& fieldset': { borderColor: '#c2c9cd' },
-                  '&:hover fieldset': { borderColor: '#8a9499' },
-                  '&.Mui-focused fieldset': { borderColor: '#087f6c' },
-                },
-                '& .MuiSelect-icon': {
-                  color: '#657075',
-                  fontSize: 20,
-                },
-              }}
-            >
-              {Object.keys(MOCK_TEST_RULES).map((tName) => (
-                <MenuItem key={tName} value={tName} sx={{ fontSize: 13 }}>
-                  {tName}
-                </MenuItem>
-              ))}
-            </TextField>
+                  fontWeight: 500,
+                  '&:hover': { backgroundColor: 'transparent', textDecoration: 'underline' },
+                  '&.Mui-disabled': { color: '#9aa3a8' },
+                }}
+              >
+                Add all
+              </Button>
+              <Divider orientation="vertical" flexItem sx={{ borderColor: '#d7dde0' }} />
+              <Button
+                size="small"
+                onClick={handleDeselectAllImportRules}
+                disabled={selectedRuleIds.length === 0}
+                sx={{
+                  minWidth: 'auto',
+                  p: 0,
+                  textTransform: 'none',
+                  color: '#087f6c',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  '&:hover': { backgroundColor: 'transparent', textDecoration: 'underline' },
+                  '&.Mui-disabled': { color: '#9aa3a8' },
+                }}
+              >
+                Deselect all
+              </Button>
+            </Box>
           </Box>
 
           {/* Rules Checklist Container */}
@@ -2101,27 +2275,13 @@ const SuppressionRulesDrawer = ({
               boxSizing: 'border-box',
             }}
           >
-            {!selectedImportTest ? (
-              <Box
-                sx={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Typography sx={{ fontSize: 13.5, color: '#657075', textAlign: 'center' }}>
-                  Select a test to view rules.
-                </Typography>
-              </Box>
-            ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                {(MOCK_TEST_RULES[selectedImportTest] || []).map((item) => {
-                  const isChecked = selectedRuleIds.includes(item.id);
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {importableRules.map((item) => {
+                  const isChecked = selectedRuleIds.includes(item.importId);
                   return (
                     <Box
-                      key={item.id}
-                      onClick={() => handleToggleRuleSelection(item.id)}
+                      key={item.importId}
+                      onClick={() => handleToggleRuleSelection(item.importId)}
                       sx={{
                         display: 'flex',
                         alignItems: 'flex-start',
@@ -2136,7 +2296,7 @@ const SuppressionRulesDrawer = ({
                         size="small"
                         checked={isChecked}
                         onClick={(e) => e.stopPropagation()}
-                        onChange={() => handleToggleRuleSelection(item.id)}
+                        onChange={() => handleToggleRuleSelection(item.importId)}
                         sx={{
                           p: 0.25,
                           mt: 0.2,
@@ -2146,17 +2306,16 @@ const SuppressionRulesDrawer = ({
                       />
                       <Box>
                         <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#1c1f21', lineHeight: 1.3 }}>
-                          {item.name}
+                          {item.rule.name}
                         </Typography>
                         <Typography sx={{ fontSize: 12, color: '#657075', mt: 0.25, lineHeight: 1.3 }}>
-                          {item.description}
+                          {item.rule.description}
                         </Typography>
                       </Box>
                     </Box>
                   );
                 })}
-              </Box>
-            )}
+            </Box>
           </Box>
 
           {/* Dialog Action Buttons */}
@@ -2166,8 +2325,8 @@ const SuppressionRulesDrawer = ({
               onClick={handleCloseImportDialog}
               sx={{
                 textTransform: 'none',
-                color: '#1c1f21',
-                borderColor: '#73627a',
+                color: '#344046',
+                borderColor: '#c2c9cd',
                 borderRadius: '4px',
                 fontSize: 13,
                 fontWeight: 500,
@@ -2175,14 +2334,14 @@ const SuppressionRulesDrawer = ({
                 py: 0.5,
                 height: 32,
                 boxShadow: 'none',
-                '&:hover': { borderColor: '#524557', backgroundColor: '#f9f8fa' },
+                '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
               }}
             >
               Cancel
             </Button>
             <Button
-              variant="outlined"
-              disabled={!selectedImportTest || selectedRuleIds.length === 0}
+              variant="contained"
+              disabled={selectedRuleIds.length === 0}
               onClick={handleConfirmImport}
               sx={{
                 textTransform: 'none',
@@ -2192,22 +2351,20 @@ const SuppressionRulesDrawer = ({
                 px: 2,
                 py: 0.5,
                 height: 32,
-                color: '#73627a',
-                borderColor: '#73627a',
-                backgroundColor: '#fff',
+                color: '#ffffff',
+                backgroundColor: '#087f6c',
                 boxShadow: 'none',
                 '&:hover': {
-                  backgroundColor: '#f5f2f7',
-                  borderColor: '#524557',
+                  backgroundColor: '#066657',
+                  boxShadow: 'none',
                 },
                 '&.Mui-disabled': {
-                  color: '#9e92a4',
-                  borderColor: '#c5bec9',
-                  backgroundColor: '#fff',
+                  color: '#fff',
+                  backgroundColor: '#a9d6ce',
                 },
               }}
             >
-              Import rules
+              {selectedRuleIds.length > 0 ? `Import ${selectedRuleIds.length} rule${selectedRuleIds.length === 1 ? '' : 's'}` : 'Import rules'}
             </Button>
           </Box>
         </Box>

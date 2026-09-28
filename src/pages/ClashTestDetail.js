@@ -80,6 +80,7 @@ import dayjs from 'dayjs';
 import { getModelForIModel } from '../utils/pittsburghModels.js';
 import { generateClashesForTest } from '../utils/tailoredClashes.js';
 import { ClashIcon } from '../components/Sidebar';
+import ProjectHeader from '../components/ProjectHeader';
 import SuppressionRulesDrawer from '../components/SuppressionRulesDrawer';
 import CreateClashFormDialog from '../components/CreateClashFormDialog';
 import {
@@ -103,6 +104,7 @@ const TEST_SETTINGS_TAG_USAGE = [
 
 const VIEWER_MIN_CAMERA_DISTANCE = 5;
 const VIEWER_MAX_CAMERA_DISTANCE = 60;
+const CURRENT_USER_NAME = 'Jeanlouise Hornberger';
 
 const IsolateElementsIcon = (props) => (
   <SvgIcon {...props} viewBox="0 0 24 24">
@@ -448,6 +450,15 @@ const getClusterGroups = (clashesList, clusterType) => {
         });
       }
     });
+
+    const untaggedClashes = clashesList.filter((c) => !c.tags || c.tags.length === 0);
+    if (untaggedClashes.length > 0) {
+      groups.push({
+        id: 'no-tags',
+        name: 'No tags applied',
+        clashes: untaggedClashes,
+      });
+    }
 
     return groups;
   }
@@ -868,29 +879,21 @@ const ClashTestDetail = () => {
   // { statusById, changedIds, changedCount, unchangedCount, showAffectedOnly }
   const [previewMode, setPreviewMode] = useState(null);
 
-  const handleSwitchIModel = (newIModel) => {
-    const stored = getStoredTests();
-    const matching = stored.find((t) => t.iModel === newIModel);
-    if (matching) {
-      navigate(`/clash-detection/test/${matching.id}`, { state: matching });
-    } else {
-      const fallbackTest = {
-        ...testData,
-        id: Date.now(),
-        iModel: newIModel,
-      };
-      navigate(`/clash-detection/test/${testData.id || 1}`, { state: fallbackTest });
-    }
-  };
   const [suppressionDrawerOpen, setSuppressionDrawerOpen] = useState(false);
   const [initialCreateRuleData, setInitialCreateRuleData] = useState(null);
 
   // Suppress dropdown menu state
   const [suppressMenuAnchorEl, setSuppressMenuAnchorEl] = useState(null);
+  const [suppressDialogOpen, setSuppressDialogOpen] = useState(false);
+  const [suppressDialogClashIds, setSuppressDialogClashIds] = useState([]);
+  const [suppressComment, setSuppressComment] = useState('');
+
+  const getActiveTargetRows = () =>
+    checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
 
   const handleOpenSuppressMenu = (e) => {
     // Determine active target clashes
-    const targetRows = checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
+    const targetRows = getActiveTargetRows();
     if (targetRows.length === 0) return;
     if (checkedIds.length === 0 && selectedClashId) {
       setCheckedIds([selectedClashId]);
@@ -902,28 +905,69 @@ const ClashTestDetail = () => {
     setSuppressMenuAnchorEl(null);
   };
 
-  const handleQuickSuppressClash = () => {
-    const targetRows = checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
+  const handleOpenSuppressDialog = () => {
+    const targetRows = getActiveTargetRows();
     if (targetRows.length === 0) return;
+    if (checkedIds.length === 0 && selectedClashId) {
+      setCheckedIds([selectedClashId]);
+    }
+    const selectedSuppressedNotes = targetRows
+      .map((clashId) => clashes.find((clash) => clash.id === clashId))
+      .filter((clash) => clash?.status && clash.suppressionNote)
+      .map((clash) => clash.suppressionNote);
+    const initialNote =
+      selectedSuppressedNotes.length > 0 &&
+      selectedSuppressedNotes.every((note) => note === selectedSuppressedNotes[0])
+        ? selectedSuppressedNotes[0]
+        : '';
+    setSuppressDialogClashIds(targetRows);
+    setSuppressComment(initialNote);
+    setSuppressDialogOpen(true);
+  };
+
+  const handleCloseSuppressDialog = () => {
+    setSuppressDialogOpen(false);
+    setSuppressDialogClashIds([]);
+    setSuppressComment('');
+  };
+
+  const handleRemoveSuppressDialogClash = (clashId) => {
+    setSuppressDialogClashIds((prev) => prev.filter((id) => id !== clashId));
+  };
+
+  const handleCreateSuppression = () => {
+    if (suppressDialogClashIds.length === 0) return;
+    const note = suppressComment.trim();
 
     setClashes((prev) =>
-      prev.map((c) => (targetRows.includes(c.id) ? { ...c, status: 'Suppressed' } : c))
+      prev.map((c) =>
+        suppressDialogClashIds.includes(c.id)
+          ? { ...c, status: 'Suppressed', suppressionNote: note, suppressedBy: CURRENT_USER_NAME }
+          : c
+      )
     );
-    handleCloseSuppressMenu();
+    setCheckedIds(suppressDialogClashIds);
+    setSelectedClashId(suppressDialogClashIds[0] || null);
+    setToastMessage(`Suppressed ${suppressDialogClashIds.length} clash${suppressDialogClashIds.length === 1 ? '' : 'es'}`);
+    handleCloseSuppressDialog();
   };
 
   const handleQuickUnsuppressClash = () => {
-    const targetRows = checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
+    const targetRows = getActiveTargetRows();
     if (targetRows.length === 0) return;
 
     setClashes((prev) =>
-      prev.map((c) => (targetRows.includes(c.id) ? { ...c, status: '' } : c))
+      prev.map((c) =>
+        targetRows.includes(c.id)
+          ? { ...c, status: '', suppressionNote: '', suppressedBy: '' }
+          : c
+      )
     );
     handleCloseSuppressMenu();
   };
 
   const handleCreateRuleFromClash = () => {
-    const targetRows = checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
+    const targetRows = getActiveTargetRows();
     const targetClash = clashes.find((c) => targetRows.includes(c.id)) || clashes[0];
 
     // Prepopulate based on the clash data as in Screenshot 1 & 2
@@ -955,10 +999,14 @@ const ClashTestDetail = () => {
     }
 
     // Suppress the currently selected clashes (legacy quick-suppress path)
-    const targetRows = checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
+    const targetRows = getActiveTargetRows();
     if (targetRows.length > 0) {
       setClashes((prev) =>
-        prev.map((c) => (targetRows.includes(c.id) ? { ...c, status: 'Suppressed' } : c))
+        prev.map((c) =>
+          targetRows.includes(c.id)
+            ? { ...c, status: 'Suppressed', suppressedBy: CURRENT_USER_NAME }
+            : c
+        )
       );
     }
 
@@ -1122,6 +1170,16 @@ const ClashTestDetail = () => {
     setTsTagSearch('');
   };
 
+  const handleCreateTagFromTagPopover = () => {
+    const newTagName = tagFilterQuery.trim();
+    if (!newTagName) return;
+    const alreadyExists = tsTagList.some((t) => t.name.toLowerCase() === newTagName.toLowerCase());
+    if (alreadyExists) return;
+    setTsTagList((prev) => [{ name: newTagName }, ...prev]);
+    setPendingSelectedTags((prev) => (prev.includes(newTagName) ? prev : [...prev, newTagName]));
+    setTagFilterQuery('');
+  };
+
   const handleOpenTagRowMenu = (e, tagName) => {
     setTsTagMenuAnchorEl(e.currentTarget);
     setTsTagMenuTarget(tagName);
@@ -1146,6 +1204,13 @@ const ClashTestDetail = () => {
     (t) => t.name.toLowerCase() === tsTagSearch.trim().toLowerCase()
   );
   const tsTagCanCreate = tsTagSearch.trim().length > 0 && !tsTagExactMatch;
+  const filteredTagPopoverList = tsTagList
+    .map((t) => t.name)
+    .filter((tagName) => tagName.toLowerCase().includes(tagFilterQuery.trim().toLowerCase()));
+  const tagPopoverExactMatch = tsTagList.some(
+    (t) => t.name.toLowerCase() === tagFilterQuery.trim().toLowerCase()
+  );
+  const tagPopoverCanCreate = tagFilterQuery.trim().length > 0 && !tagPopoverExactMatch;
 
   // Live count of how many clashes each tag is actually applied to
   const tsTagUsageCounts = useMemo(() => {
@@ -1259,6 +1324,8 @@ const ClashTestDetail = () => {
       elementA: getMixedValue((clash) => clash.elementA),
       elementB: getMixedValue((clash) => clash.elementB),
       status: getMixedValue((clash) => (clash.status ? 'Suppressed' : 'Unsuppressed')),
+      suppressedBy: getMixedValue((clash) => clash.suppressedBy || '', ''),
+      suppressionNote: getMixedValue((clash) => clash.suppressionNote || '', ''),
       penetration: getMixedValue((clash) => clash.penetration),
       tags: getMixedTags(),
     };
@@ -1585,13 +1652,14 @@ const ClashTestDetail = () => {
   };
 
 
-  const handleCreateClashForm = ({ subject, assignedTo, dueDate, comment, formStatus }) => {
+  const handleCreateClashForm = ({ formTemplate, subject, assignedTo, dueDate, comment, formStatus }) => {
     const targetRows = checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
     if (targetRows.length === 0) return;
 
     const sharedFormId = `FORM-${Date.now()}`;
     const newForm = {
       id: sharedFormId,
+      formTemplate: formTemplate || '',
       subject: subject || '',
       status: formStatus || 'Open',
       assignedTo: assignedTo || 'Jeanlouise Hornberger',
@@ -1716,6 +1784,32 @@ const ClashTestDetail = () => {
       setUndoBackup(null);
       setToastMessage('');
     }
+  };
+
+  const handleRemoveTagFromSelectedClashes = (tagName) => {
+    const targetRowIds = checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
+    if (targetRowIds.length === 0) return;
+
+    const removedCount = clashes
+      .filter((clash) => targetRowIds.includes(clash.id) && (clash.tags || []).includes(tagName))
+      .length;
+    if (removedCount === 0) return;
+
+    setUndoBackup({
+      clashesState: clashes.map((c) => ({ ...c, tags: [...(c.tags || [])] })),
+      targetIds: [...targetRowIds],
+    });
+
+    setClashes((prev) =>
+      prev.map((c) =>
+        targetRowIds.includes(c.id)
+          ? { ...c, tags: (c.tags || []).filter((tag) => tag !== tagName) }
+          : c
+      )
+    );
+
+    const targetLabel = targetRowIds.length === 1 ? targetRowIds[0] : `${targetRowIds.length} clashes`;
+    setToastMessage(`${tagName} removed from ${targetLabel}`);
   };
 
   const handleToggleCheck = (rowId, e) => {
@@ -1925,7 +2019,11 @@ const ClashTestDetail = () => {
     if (!group) return;
     const groupIds = group.clashes.map((c) => c.id);
     setClashes((prev) =>
-      prev.map((c) => (groupIds.includes(c.id) ? { ...c, status: 'Suppressed' } : c))
+      prev.map((c) =>
+        groupIds.includes(c.id)
+          ? { ...c, status: 'Suppressed', suppressedBy: CURRENT_USER_NAME }
+          : c
+      )
     );
     setToastMessage(`Suppressed ${groupIds.length} clashes in ${group.name}`);
     setClusterActionAnchorEl(null);
@@ -2322,28 +2420,7 @@ const ClashTestDetail = () => {
     <Box sx={{ minHeight: '100vh', backgroundColor: '#fff', display: 'flex', flexDirection: 'column' }}>
       {/* Topbar matching app layout */}
       <Box className="topbar">
-        <TextField
-          select
-          size="small"
-          value={testData.iModel || 'Roberto Clemente Bridge'}
-          onChange={(e) => handleSwitchIModel(e.target.value)}
-          SelectProps={{ IconComponent: ExpandMoreIcon }}
-          sx={{
-            width: 220,
-            '& .MuiOutlinedInput-root': {
-              backgroundColor: '#fff',
-              fontSize: 13,
-              fontWeight: 500,
-              height: 32,
-              '& fieldset': { borderColor: '#c2c9cd' },
-              '&:hover fieldset': { borderColor: '#8a9296' },
-            },
-          }}
-        >
-          <MenuItem value="Roberto Clemente Bridge">Roberto Clemente Bridge</MenuItem>
-          <MenuItem value="Liberty Bridge">Liberty Bridge</MenuItem>
-          <MenuItem value="PPG Place">PPG Place</MenuItem>
-        </TextField>
+        <ProjectHeader />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, ml: 1 }}>
           <ClashIcon sx={{ fontSize: 16, color: '#536066' }} />
           <Link
@@ -2491,7 +2568,7 @@ const ClashTestDetail = () => {
                 }}
               >
                 <Button
-                  onClick={handleQuickSuppressClash}
+                  onClick={handleOpenSuppressDialog}
                   sx={{
                     textTransform: 'none',
                     color: hasSelection ? '#344046' : '#a0aab0',
@@ -3418,9 +3495,22 @@ const ClashTestDetail = () => {
                       {/* Status */}
                       <Box>
                         <Typography sx={{ fontSize: 12, color: '#657075', fontWeight: 500 }}>Status</Typography>
-                        <Typography sx={{ fontSize: 13, color: '#1c1f21', mt: 0.25 }}>
-                          {detailValues.status}
-                        </Typography>
+                        {detailValues.status === 'Suppressed' ? (
+                          <>
+                            <Typography sx={{ fontSize: 13, color: '#1c1f21', mt: 0.25 }}>
+                              Suppressed by {detailValues.suppressedBy || CURRENT_USER_NAME}
+                            </Typography>
+                            {detailValues.suppressionNote && (
+                              <Typography sx={{ fontSize: 12.5, color: '#657075', mt: 0.5, lineHeight: 1.45 }}>
+                                {detailValues.suppressionNote}
+                              </Typography>
+                            )}
+                          </>
+                        ) : (
+                          <Typography sx={{ fontSize: 12.5, color: '#657075', mt: 0.5, lineHeight: 1.45 }}>
+                            {detailValues.status}
+                          </Typography>
+                        )}
                       </Box>
 
                       {/* Overlap */}
@@ -3446,6 +3536,7 @@ const ClashTestDetail = () => {
                                 label={tag}
                                 size="small"
                                 variant="outlined"
+                                onDelete={() => handleRemoveTagFromSelectedClashes(tag)}
                                 sx={{
                                   fontSize: 12,
                                   height: 24,
@@ -3453,6 +3544,14 @@ const ClashTestDetail = () => {
                                   borderColor: '#c2c9cd',
                                   color: '#344046',
                                   backgroundColor: '#fff',
+                                  '& .MuiChip-deleteIcon': {
+                                    color: '#8a9296',
+                                    fontSize: 17,
+                                    mr: 0.5,
+                                    '&:hover': {
+                                      color: '#344046',
+                                    },
+                                  },
                                 }}
                               />
                             ))}
@@ -3904,6 +4003,12 @@ const ClashTestDetail = () => {
           fullWidth
           value={tagFilterQuery}
           onChange={(e) => setTagFilterQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && tagPopoverCanCreate) {
+              e.preventDefault();
+              handleCreateTagFromTagPopover();
+            }
+          }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -3921,13 +4026,36 @@ const ClashTestDetail = () => {
             },
           }}
         />
+        {tagPopoverCanCreate && (
+          <Typography sx={{ fontSize: 12, color: '#657075', mt: -1, mb: 1 }}>
+            Hit enter to create this tag
+          </Typography>
+        )}
 
         {/* Tag Options with Rounded Checkboxes */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, maxHeight: 220, overflowY: 'auto' }}>
-          {tsTagList
-            .map((t) => t.name)
-            .filter((t) => t.toLowerCase().includes(tagFilterQuery.toLowerCase()))
-            .map((tagName) => {
+          {filteredTagPopoverList.length === 0 ? (
+            <Box
+              sx={{
+                minHeight: 170,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                px: 2,
+                color: '#657075',
+              }}
+            >
+              <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21', mb: 0.75 }}>
+                No tags found
+              </Typography>
+              <Typography sx={{ fontSize: 12, color: '#657075', lineHeight: 1.45 }}>
+                Type a tag name in the field above then hit 'Enter' to create.
+              </Typography>
+            </Box>
+          ) : (
+            filteredTagPopoverList.map((tagName) => {
             const isChecked = pendingSelectedTags.includes(tagName);
             return (
               <Box
@@ -3963,7 +4091,8 @@ const ClashTestDetail = () => {
                 <Typography sx={{ fontSize: 13, color: '#1c1f21' }}>{tagName}</Typography>
               </Box>
             );
-          })}
+          })
+          )}
         </Box>
 
         <Divider sx={{ my: 1.5, borderColor: '#eaedf0' }} />
@@ -4665,6 +4794,114 @@ const ClashTestDetail = () => {
       />
 
       {/* Create Clash Form Dialog matching Screenshot 1 */}
+      <Dialog
+        open={suppressDialogOpen}
+        onClose={handleCloseSuppressDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '8px',
+            boxShadow: '0 18px 48px rgba(0,0,0,0.32)',
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontSize: 20, fontWeight: 500, color: '#1c1f21', px: 2, pt: 2, pb: 1.25 }}>
+          Suppress a clash
+        </DialogTitle>
+        <DialogContent sx={{ px: 2, pb: 2 }}>
+          <Box sx={{ mb: 2 }}>
+            <Typography sx={{ fontSize: 12, color: '#344046', mb: 0.75 }}>
+              Selected clashes
+            </Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+              {suppressDialogClashIds.map((clashId) => (
+                <Chip
+                  key={clashId}
+                  label={clashId}
+                  size="small"
+                  onDelete={() => handleRemoveSuppressDialogClash(clashId)}
+                  sx={{
+                    height: 24,
+                    fontSize: 12,
+                    color: '#1c1f21',
+                    backgroundColor: '#fff',
+                    border: '1px solid #9aa7ad',
+                    borderRadius: '14px',
+                    '& .MuiChip-deleteIcon': {
+                      fontSize: 16,
+                      color: '#657075',
+                      '&:hover': { color: '#1c1f21' },
+                    },
+                  }}
+                />
+              ))}
+            </Box>
+          </Box>
+
+          <Box>
+            <Typography sx={{ fontSize: 12, color: '#657075', mb: 0.75 }}>
+              Comment
+            </Typography>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Add a note"
+              value={suppressComment}
+              onChange={(event) => setSuppressComment(event.target.value)}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  height: 34,
+                  fontSize: 13,
+                  borderRadius: '3px',
+                  '& fieldset': { borderColor: '#c2c9cd' },
+                  '&:hover fieldset': { borderColor: '#8a9499' },
+                  '&.Mui-focused fieldset': { borderColor: '#087f6c' },
+                },
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5, borderTop: '1px solid #e0e4e6' }}>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleCloseSuppressDialog}
+            sx={{
+              textTransform: 'none',
+              backgroundColor: '#657075',
+              color: '#fff',
+              borderRadius: '4px',
+              fontSize: 13,
+              fontWeight: 500,
+              boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+              '&:hover': { backgroundColor: '#536066', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' },
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            disabled={suppressDialogClashIds.length === 0}
+            onClick={handleCreateSuppression}
+            sx={{
+              textTransform: 'none',
+              backgroundColor: '#087f6c',
+              color: '#fff',
+              borderRadius: '4px',
+              fontSize: 13,
+              fontWeight: 500,
+              boxShadow: '0 2px 5px rgba(0,0,0,0.18)',
+              '&:hover': { backgroundColor: '#066657', boxShadow: '0 2px 5px rgba(0,0,0,0.18)' },
+              '&.Mui-disabled': { backgroundColor: '#a9d6ce', color: '#fff' },
+            }}
+          >
+            Suppress
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <CreateClashFormDialog
         open={createFormDialogOpen}
         onClose={handleCloseCreateForm}
@@ -4891,6 +5128,13 @@ const ClashTestDetail = () => {
           setInitialCreateRuleData(null);
         }}
         rules={draftSuppressionRules}
+        availableRules={getStoredTests().flatMap((test) =>
+          (test.suppressionRules || []).map((rule) => ({
+            importId: `${test.id}:${rule.id}`,
+            sourceTestName: test.name,
+            rule,
+          }))
+        )}
         testName={testData.name || 'AR vs EL'}
         onSaveRule={handleSaveSuppressionRule}
         onDeleteRule={handleDeleteSuppressionRule}

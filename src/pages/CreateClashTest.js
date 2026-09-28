@@ -5,7 +5,6 @@ import {
   Button,
   Checkbox,
   Collapse,
-  Divider,
   IconButton,
   Link,
   MenuItem,
@@ -21,9 +20,11 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { ClashIcon } from '../components/Sidebar';
+import ProjectHeader from '../components/ProjectHeader';
 import IModelViewerModal from '../components/IModelViewerModal';
 import IModelQuickViewModal from '../components/IModelQuickViewModal';
 import SuppressionRulesDrawer from '../components/SuppressionRulesDrawer';
+import { getStoredTests } from '../data/clashTestsStore';
 
 const createOptionGroup = (id, name, children) => ({
   id,
@@ -348,6 +349,9 @@ const getSetOptionsForIModel = (iModel) => {
   return ROBERTO_CLEMENTE_SET_OPTIONS;
 };
 
+// Units of measure shared by the touching tolerance and clearance inputs (abbreviated to save space)
+const LENGTH_UNIT_OPTIONS = ['in', 'ft', 'yd', 'mi', 'mm', 'cm', 'm', 'km'];
+
 // Diamond empty set illustration
 const EmptySetIcon = (props) => (
   <SvgIcon {...props} viewBox="0 0 48 48" sx={{ fontSize: 44, color: '#4a555b', ...props.sx }}>
@@ -426,6 +430,10 @@ const CreateClashTest = () => {
   const [selfCheckB, setSelfCheckB] = useState(false);
   const [clearanceB, setClearanceB] = useState('0.00');
 
+  // Shared unit of measure for touching tolerance and clearance inputs.
+  // Changing the unit anywhere updates it everywhere.
+  const [lengthUnit, setLengthUnit] = useState('in');
+
   // Settings column
   const [touchingTolerance, setTouchingTolerance] = useState('00.00');
   const [calculateOverlap, setCalculateOverlap] = useState(false);
@@ -475,6 +483,56 @@ const CreateClashTest = () => {
       color: '#087f6c',
     },
   };
+
+  // Combined value + unit input matching the reference design: a single bordered
+  // field containing the numeric value and a unit dropdown, separated by a divider.
+  // The unit dropdown shares `lengthUnit` state, so changing it anywhere updates
+  // touching tolerance and both clearance inputs to match.
+  const renderValueWithUnitInput = (value, onChange, numberWidth = 46) => (
+    <Box
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        height: 30,
+        borderRadius: '4px',
+        border: '1px solid #c2c9cd',
+        backgroundColor: '#fff',
+        overflow: 'hidden',
+        '&:focus-within': { borderColor: '#087f6c' },
+      }}
+    >
+      <TextField
+        size="small"
+        value={value}
+        onChange={onChange}
+        variant="standard"
+        InputProps={{ disableUnderline: true }}
+        sx={{
+          width: numberWidth,
+          '& input': { fontSize: 13, textAlign: 'center', color: '#1c1f21', py: 0.5, px: 0.75 },
+        }}
+      />
+      <Box sx={{ width: '1px', alignSelf: 'stretch', my: 0.5, backgroundColor: '#c2c9cd' }} />
+      <TextField
+        select
+        size="small"
+        variant="standard"
+        value={lengthUnit}
+        onChange={(e) => setLengthUnit(e.target.value)}
+        SelectProps={{ IconComponent: ExpandMoreIcon, disableUnderline: true }}
+        sx={{
+          minWidth: 48,
+          '& .MuiSelect-select': { fontSize: 13, color: '#4a5257', py: 0.5, pl: 1, pr: '22px !important' },
+        }}
+      >
+        {LENGTH_UNIT_OPTIONS.map((unit) => (
+          <MenuItem key={unit} value={unit} sx={{ fontSize: 13 }}>
+            {unit}
+          </MenuItem>
+        ))}
+      </TextField>
+    </Box>
+  );
 
   const handleOpenPopover = (event, targetSet) => {
     setActivePopoverSet(targetSet);
@@ -557,6 +615,19 @@ const CreateClashTest = () => {
     else setSetBItems([]);
   };
 
+  const handleSelectAllInPopover = (groups, targetSet) => {
+    const isSetA = targetSet === 'A' || targetSet === 'Set A';
+    const allChildIds = groups.flatMap((group) => group.children.map((c) => c.id));
+
+    if (isSetA) {
+      setSetAItems((prev) => Array.from(new Set([...prev, ...allChildIds])));
+      setSetBItems((prev) => prev.filter((id) => !allChildIds.includes(id)));
+    } else {
+      setSetBItems((prev) => Array.from(new Set([...prev, ...allChildIds])));
+      setSetAItems((prev) => prev.filter((id) => !allChildIds.includes(id)));
+    }
+  };
+
   const renderSetCard = (badgeColor, badgeLetter, targetSet, selfCheck, setSelfCheck, clearance, setClearance) => {
     const isSetA = targetSet === 'A' || targetSet === 'Set A';
     const setKey = isSetA ? 'A' : 'B';
@@ -621,7 +692,7 @@ const CreateClashTest = () => {
 
         {/* Search box trigger */}
         <TextField
-          placeholder="Search or browse to add elements"
+          placeholder="Search or browse to add criteria"
           size="small"
           fullWidth
           value={searchQuery}
@@ -669,7 +740,7 @@ const CreateClashTest = () => {
               This set is empty
             </Typography>
             <Typography sx={{ fontSize: 13, color: '#657075' }}>
-              Use the search box to add elements
+              Use the search box to add criteria
             </Typography>
           </Box>
         ) : (
@@ -803,10 +874,12 @@ const CreateClashTest = () => {
             pt: 2,
             mt: 'auto',
             borderTop: selectedItems.length > 0 ? '1px solid #eaedf0' : 'none',
+            flexWrap: 'nowrap',
+            gap: 1,
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography sx={{ fontSize: 13, color: '#4a5257' }}>Self check</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0 }}>
+            <Typography sx={{ fontSize: 13, color: '#4a5257', whiteSpace: 'nowrap' }}>Self check</Typography>
             <Checkbox
               size="small"
               checked={selfCheck}
@@ -814,24 +887,9 @@ const CreateClashTest = () => {
               sx={roundedCheckboxSx}
             />
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography sx={{ fontSize: 13, color: '#4a5257' }}>Clearance</Typography>
-            <TextField
-              size="small"
-              value={clearance}
-              onChange={(e) => setClearance(e.target.value)}
-              sx={{
-                width: 68,
-                '& .MuiOutlinedInput-root': {
-                  height: 30,
-                  fontSize: 13,
-                  borderRadius: '4px',
-                  '& fieldset': { borderColor: '#c2c9cd' },
-                },
-                '& input': { textAlign: 'center', py: 0.5, px: 0.5 },
-              }}
-            />
-            <Typography sx={{ fontSize: 13, color: '#4a5257' }}>inches</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
+            <Typography sx={{ fontSize: 13, color: '#4a5257', whiteSpace: 'nowrap' }}>Clearance</Typography>
+            {renderValueWithUnitInput(clearance, (e) => setClearance(e.target.value))}
           </Box>
         </Box>
       </Paper>
@@ -851,9 +909,7 @@ const CreateClashTest = () => {
     <Box sx={{ p: 0, backgroundColor: '#fff', height: '100vh', minHeight: '650px', display: 'flex', flexDirection: 'column' }}>
       {/* Top breadcrumb bar */}
       <Box className="topbar">
-        <TextField select size="small" value={testInfo.iModel || 'Project name'} SelectProps={{ IconComponent: ExpandMoreIcon }} sx={{ width: 150 }}>
-          <MenuItem value={testInfo.iModel || 'Project name'}>{testInfo.iModel || 'Project name'}</MenuItem>
-        </TextField>
+        <ProjectHeader />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, ml: 1 }}>
           <ClashIcon sx={{ fontSize: 16, color: '#536066' }} />
           <Link
@@ -985,24 +1041,7 @@ const CreateClashTest = () => {
             {/* Touching tolerance */}
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
               <Typography sx={{ fontSize: 13, color: '#4a5257' }}>Touching tolerance</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <TextField
-                  size="small"
-                  value={touchingTolerance}
-                  onChange={(e) => setTouchingTolerance(e.target.value)}
-                  sx={{
-                    width: 68,
-                    '& .MuiOutlinedInput-root': {
-                      height: 30,
-                      fontSize: 13,
-                      borderRadius: '4px',
-                      '& fieldset': { borderColor: '#c2c9cd' },
-                    },
-                    '& input': { textAlign: 'center', py: 0.5, px: 0.5 },
-                  }}
-                />
-                <Typography sx={{ fontSize: 13, color: '#4a5257' }}>inches</Typography>
-              </Box>
+              {renderValueWithUnitInput(touchingTolerance, (e) => setTouchingTolerance(e.target.value))}
             </Box>
 
             {/* Calculate overlap */}
@@ -1027,9 +1066,9 @@ const CreateClashTest = () => {
               />
             </Box>
 
-            {/* Include non-physical elements */}
+            {/* Include non-physical objects */}
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-              <Typography sx={{ fontSize: 13, color: '#4a5257' }}>Include non-physical elements</Typography>
+              <Typography sx={{ fontSize: 13, color: '#4a5257' }}>Include non-physical objects</Typography>
               <Checkbox
                 size="small"
                 checked={includeNonPhysical}
@@ -1038,11 +1077,9 @@ const CreateClashTest = () => {
               />
             </Box>
 
-            <Divider sx={{ my: 2, borderColor: '#e4e8eb' }} />
-
-            {/* Run automatically */}
+            {/* Automatically run with new named version */}
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography sx={{ fontSize: 13, color: '#4a5257' }}>Run automatically</Typography>
+              <Typography sx={{ fontSize: 13, color: '#4a5257' }}>Automatically run with new named version</Typography>
               <Checkbox
                 size="small"
                 checked={runAutomatically}
@@ -1237,7 +1274,46 @@ const CreateClashTest = () => {
 
         {/* Tree Content */}
         <Box sx={{ flex: 1, overflowY: 'auto', p: 1.25 }}>
-          {filteredPopoverGroups.map((group) => {
+          {(includeRefModels || activeTab === 'groups') && (
+            (() => {
+              const currentSetItems = activePopoverSet === 'A' ? setAItems : setBItems;
+              return filteredPopoverGroups.map((group) => {
+                const childIds = group.children.map((c) => c.id);
+                const selectedCount = childIds.filter((id) => currentSetItems.includes(id)).length;
+                const isAllSelected = childIds.length > 0 && selectedCount === childIds.length;
+                const isIndeterminate = selectedCount > 0 && selectedCount < childIds.length;
+                return (
+                  <Box
+                    key={group.id}
+                    onClick={() => handleToggleGroup(group, activePopoverSet)}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      py: 0.35,
+                      px: 0.5,
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      '&:hover': { backgroundColor: '#f0f4f7' },
+                    }}
+                  >
+                    <Checkbox
+                      size="small"
+                      checked={isAllSelected}
+                      indeterminate={isIndeterminate}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => handleToggleGroup(group, activePopoverSet)}
+                      sx={treeCheckboxSx}
+                    />
+                    <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#1c1f21' }}>
+                      {group.name}
+                    </Typography>
+                  </Box>
+                );
+              });
+            })()
+          )}
+          {!includeRefModels && activeTab !== 'groups' && filteredPopoverGroups.map((group) => {
             const isGroupExpanded = popoverExpanded[group.id] !== false;
             const currentSetItems = activePopoverSet === 'A' ? setAItems : setBItems;
             const childIds = group.children.map((c) => c.id);
@@ -1328,9 +1404,25 @@ const CreateClashTest = () => {
           })}
           {filteredPopoverGroups.length === 0 && (
             <Typography sx={{ px: 1, py: 2, fontSize: 13, color: '#657075' }}>
-              No matching elements
+              No matching criteria
             </Typography>
           )}
+        </Box>
+
+        {/* Select all footer */}
+        <Box
+          onClick={() => handleSelectAllInPopover(filteredPopoverGroups, activePopoverSet)}
+          sx={{
+            borderTop: '1px solid #e0e4e6',
+            py: 1.25,
+            textAlign: 'center',
+            cursor: 'pointer',
+            '&:hover': { backgroundColor: '#f8fafb' },
+          }}
+        >
+          <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#087f6c' }}>
+            {`Select all ${activeTab}`}
+          </Typography>
         </Box>
       </Popover>
 
@@ -1349,6 +1441,13 @@ const CreateClashTest = () => {
         onClose={() => setSuppressionDrawerOpen(false)}
         rules={suppressionRules}
         testName={testInfo.name || 'AR vs PH'}
+        availableRules={getStoredTests().flatMap((test) =>
+          (test.suppressionRules || []).map((rule) => ({
+            importId: `${test.id}:${rule.id}`,
+            sourceTestName: test.name,
+            rule,
+          }))
+        )}
         onSaveRule={(newRule) => {
           setSuppressionRules((prev) => [newRule, ...prev]);
         }}

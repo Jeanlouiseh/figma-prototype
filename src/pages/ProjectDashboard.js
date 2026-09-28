@@ -20,6 +20,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ProjectHeader from '../components/ProjectHeader';
 
 const ProjectDashboard = () => {
   const [projects, setProjects] = useState([
@@ -49,9 +50,7 @@ const ProjectDashboard = () => {
   return (
     <Box className="dashboard-page" sx={{ p: 0 }}>
       <Box className="topbar">
-        <TextField select size="small" value="Roberto Clemente Bridge" SelectProps={{ IconComponent: ExpandMoreIcon }} sx={{ width: 180 }}>
-          <MenuItem value="Roberto Clemente Bridge">Project name</MenuItem>
-        </TextField>
+        <ProjectHeader />
         <Breadcrumbs separator="/" sx={{ fontSize: 12, ml: 1 }}><Link underline="always" color="text.primary" href="#">Link</Link><Link underline="always" color="text.primary" href="#">Link</Link></Breadcrumbs>
         <TextField size="small" placeholder="Search" sx={{ width: 120, ml: 'auto' }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 16 }} /></InputAdornment> }} />
       </Box>

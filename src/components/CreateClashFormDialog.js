@@ -32,6 +32,7 @@ const TEAM_MEMBERS = [
 ];
 
 const FORM_STATUS_OPTIONS = ['Open', 'In Review', 'Closed', 'Draft'];
+const FORM_TEMPLATE_OPTIONS = ['General Clash Form', 'Design Review', 'Coordination Issue'];
 
 const DEFAULT_COMMENT =
   'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.';
@@ -42,6 +43,7 @@ const CreateClashFormDialog = ({
   onSubmit,
   targetClashes = [],
 }) => {
+  const [formTemplate, setFormTemplate] = useState('');
   const [subject, setSubject] = useState('');
   const [assignedTo, setAssignedTo] = useState('');
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
@@ -54,6 +56,7 @@ const CreateClashFormDialog = ({
   // Reset or initialize when opened
   useEffect(() => {
     if (open) {
+      setFormTemplate('');
       setSubject('');
       setAssignedTo('');
       setMemberSearchQuery('');
@@ -96,6 +99,7 @@ const CreateClashFormDialog = ({
 
   const handleSubmit = () => {
     onSubmit({
+      formTemplate,
       subject,
       assignedTo: assignedTo || 'Jeanlouise Hornberger',
       dueDate,
@@ -145,7 +149,57 @@ const CreateClashFormDialog = ({
         Create a Clash Form
       </Typography>
 
-      {/* Field 1: Subject* */}
+      {/* Field 1: Form template* */}
+      <Box sx={{ mb: 2 }}>
+        <Typography
+          sx={{
+            fontSize: 12.5,
+            fontWeight: 500,
+            color: '#4a555b',
+            mb: 0.75,
+          }}
+        >
+          Form template<span style={{ color: '#d32f2f' }}>*</span>
+        </Typography>
+        <TextField
+          select
+          fullWidth
+          size="small"
+          value={formTemplate}
+          onChange={(e) => setFormTemplate(e.target.value)}
+          SelectProps={{
+            displayEmpty: true,
+            IconComponent: KeyboardArrowDownIcon,
+            renderValue: (value) => value || 'Select',
+          }}
+          sx={{
+            '& .MuiOutlinedInput-root': {
+              height: 38,
+              fontSize: 13,
+              borderRadius: '4px',
+              '& fieldset': { borderColor: '#c2c9cd' },
+              '&:hover fieldset': { borderColor: '#8a9296' },
+              '&.Mui-focused fieldset': { borderColor: '#087f6c', borderWidth: 1 },
+            },
+            '& .MuiSelect-icon': {
+              fontSize: 18,
+              color: '#8a9296',
+            },
+          }}
+        >
+          {FORM_TEMPLATE_OPTIONS.map((template) => (
+            <MenuItem
+              key={template}
+              value={template}
+              sx={{ fontSize: 13, py: 0.8 }}
+            >
+              {template}
+            </MenuItem>
+          ))}
+        </TextField>
+      </Box>
+
+      {/* Field 2: Subject* */}
       <Box sx={{ mb: 2 }}>
         <Typography
           sx={{
@@ -177,7 +231,7 @@ const CreateClashFormDialog = ({
         />
       </Box>
 
-      {/* Field 2: Assign to* */}
+      {/* Field 3: Assign to* */}
       <Box sx={{ mb: 2 }}>
         <Typography
           sx={{
@@ -300,7 +354,7 @@ const CreateClashFormDialog = ({
         </Menu>
       </Box>
 
-      {/* Field 3: Due date */}
+      {/* Field 4: Due date */}
       <Box sx={{ mb: 2 }}>
         <Typography
           sx={{
@@ -373,7 +427,7 @@ const CreateClashFormDialog = ({
         </Popover>
       </Box>
 
-      {/* Field 4: Comment */}
+      {/* Field 5: Comment */}
       <Box sx={{ mb: 2 }}>
         <Typography
           sx={{
@@ -405,7 +459,7 @@ const CreateClashFormDialog = ({
         />
       </Box>
 
-      {/* Field 5: Form status */}
+      {/* Field 6: Form status */}
       <Box sx={{ mb: 3 }}>
         <Typography
           sx={{
