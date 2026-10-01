@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import * as THREE from 'three';
 import {
+  Avatar,
   Box,
   Button,
   ButtonGroup,
@@ -13,6 +14,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
   IconButton,
   InputAdornment,
   Link,
@@ -41,7 +43,6 @@ import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import LaunchIcon from '@mui/icons-material/Launch';
-import ViewWeekOutlinedIcon from '@mui/icons-material/ViewWeekOutlined';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
@@ -51,7 +52,6 @@ import RotateRightOutlinedIcon from '@mui/icons-material/RotateRightOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
@@ -73,6 +73,7 @@ import AddIcon from '@mui/icons-material/Add';
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import AccessTimeOutlinedIcon from '@mui/icons-material/AccessTimeOutlined';
 import FlagOutlinedIcon from '@mui/icons-material/FlagOutlined';
+import FilterAltOutlinedIcon from '@mui/icons-material/FilterAltOutlined';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
@@ -83,6 +84,7 @@ import { ClashIcon } from '../components/Sidebar';
 import ProjectHeader from '../components/ProjectHeader';
 import SuppressionRulesDrawer from '../components/SuppressionRulesDrawer';
 import CreateClashFormDialog from '../components/CreateClashFormDialog';
+import FormDetailPanel from '../components/FormDetailPanel';
 import {
   getStoredTests,
   updateTestInStore,
@@ -113,6 +115,66 @@ const IsolateElementsIcon = (props) => (
     <path d="M8.4 14.8 12 16.8 15.6 14.8" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="1.1 2" />
     <path d="M9.8 18.1 12 19.3 14.2 18.1" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="1 2" />
   </SvgIcon>
+);
+
+const ColumnManagerIcon = (props) => (
+  <SvgIcon {...props} viewBox="0 0 24 24">
+    <rect x="2.5" y="4" width="15" height="14" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M7.5 4v14M12.5 4v14" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <path d="m18.5 13 .4 1.1 1.1.4 1-.5.9.9-.5 1 .4 1.1 1.1.4v1.2l-1.1.4-.4 1.1.5 1-.9.9-1-.5-1.1.4-.4 1.1h-1.2l-.4-1.1-1.1-.4-1 .5-.9-.9.5-1-.4-1.1-1.1-.4v-1.2l1.1-.4.4-1.1-.5-1 .9-.9 1 .5 1.1-.4.4-1.1h1.2Z" fill="#fff" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round" />
+    <circle cx="17.9" cy="18" r="1.45" fill="none" stroke="currentColor" strokeWidth="1.1" />
+  </SvgIcon>
+);
+
+const FilterableTableHeader = ({
+  children,
+  onFilterClick,
+  filterActive = false,
+  filterLabel,
+  ...props
+}) => (
+  <TableCell
+    {...props}
+    sx={{
+      ...props.sx,
+      '&:hover .column-filter-icon': {
+        opacity: 1,
+      },
+    }}
+  >
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap' }}>
+      <Box component="span">{children}</Box>
+      {onFilterClick ? (
+        <IconButton
+          className="column-filter-icon"
+          aria-label={filterLabel}
+          size="small"
+          onClick={onFilterClick}
+          sx={{
+            flexShrink: 0,
+            color: filterActive ? '#087f6c' : '#536066',
+            opacity: filterActive ? 1 : 0,
+            p: 0.15,
+            transition: 'opacity 120ms ease-in-out',
+          }}
+        >
+          <FilterAltOutlinedIcon sx={{ fontSize: 15 }} />
+        </IconButton>
+      ) : (
+        <FilterAltOutlinedIcon
+          className="column-filter-icon"
+          aria-hidden="true"
+          sx={{
+            flexShrink: 0,
+            fontSize: 15,
+            color: '#536066',
+            opacity: 0,
+            transition: 'opacity 120ms ease-in-out',
+          }}
+        />
+      )}
+    </Box>
+  </TableCell>
 );
 
 // Hosts the 3D viewport either docked in the right panel or expanded into a
@@ -296,6 +358,7 @@ const CLASH_TABLE_COLUMNS = [
   {
     key: 'id',
     label: 'ID',
+    width: '7%',
     locked: true,
     cellSx: { fontWeight: 500, color: '#1c1f21', whiteSpace: 'nowrap' },
     render: (clash) => clash.id,
@@ -303,18 +366,21 @@ const CLASH_TABLE_COLUMNS = [
   {
     key: 'idNum',
     label: 'ID Number',
+    width: '9%',
     cellSx: { whiteSpace: 'nowrap' },
     render: (clash) => clash.idNum || '',
   },
   {
     key: 'status',
     label: 'Status',
+    width: '9%',
     cellSx: (clash) => ({ color: clash.status ? '#536066' : 'transparent' }),
     render: (clash) => clash.status || '',
   },
   {
     key: 'elementA',
     label: 'Element A',
+    width: '15%',
     cellSx: { maxWidth: 140 },
     render: (clash) => (
       <Typography noWrap sx={{ fontSize: 12.5 }}>
@@ -325,6 +391,7 @@ const CLASH_TABLE_COLUMNS = [
   {
     key: 'elementB',
     label: 'Element B',
+    width: '15%',
     cellSx: { maxWidth: 140 },
     render: (clash) => (
       <Typography noWrap sx={{ fontSize: 12.5 }}>
@@ -335,6 +402,7 @@ const CLASH_TABLE_COLUMNS = [
   {
     key: 'modelA',
     label: 'Model A',
+    width: '13%',
     cellSx: { maxWidth: 130 },
     render: (clash) => (
       <Typography noWrap sx={{ fontSize: 12.5 }}>
@@ -345,6 +413,7 @@ const CLASH_TABLE_COLUMNS = [
   {
     key: 'modelB',
     label: 'Model B',
+    width: '13%',
     cellSx: { maxWidth: 130 },
     render: (clash) => (
       <Typography noWrap sx={{ fontSize: 12.5 }}>
@@ -355,6 +424,7 @@ const CLASH_TABLE_COLUMNS = [
   {
     key: 'categoryA',
     label: 'Category A',
+    width: '13%',
     cellSx: { maxWidth: 130 },
     render: (clash) => (
       <Typography noWrap sx={{ fontSize: 12.5 }}>
@@ -365,12 +435,9 @@ const CLASH_TABLE_COLUMNS = [
   {
     key: 'tags',
     label: 'Tags',
-    cellSx: { maxWidth: 130 },
-    render: (clash) => (
-      <Typography noWrap sx={{ fontSize: 12.5 }}>
-        {(clash.tags || []).join(', ')}
-      </Typography>
-    ),
+    width: '6%',
+    cellSx: { whiteSpace: 'nowrap' },
+    render: (clash) => (clash.tags || []).length,
   },
 ];
 
@@ -382,6 +449,7 @@ const DEFAULT_VISIBLE_COLUMN_KEYS = [
   'modelA',
   'modelB',
   'categoryA',
+  'tags',
 ];
 
 const CLUSTER_OPTIONS = [
@@ -396,6 +464,187 @@ const CLUSTER_OPTIONS = [
   'Form',
   'Form status',
 ];
+
+const getInitials = (name) =>
+  name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+
+const FormCard = ({ form, onClick }) => (
+  <Box
+    {...(onClick && {
+      role: 'button',
+      tabIndex: 0,
+      'aria-label': `Open form ${form.subject || form.id}`,
+      onClick,
+      onKeyDown: (event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      },
+    })}
+    sx={{
+      p: 1.5,
+      backgroundColor: '#fff',
+      borderRadius: '3px',
+      border: '1px solid #c7cdd1',
+      boxShadow: '0 1px 2px rgba(28, 31, 33, 0.12)',
+      ...(onClick && {
+        cursor: 'pointer',
+        '&:hover': { borderColor: '#8a9296', boxShadow: '0 2px 6px rgba(28, 31, 33, 0.16)' },
+        '&:focus-visible': { outline: '2px solid #087f6c', outlineOffset: 1 },
+      }),
+    }}
+  >
+    <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1, mb: 1 }}>
+      <Typography sx={{ fontSize: 20, lineHeight: 1.25, fontWeight: 400, color: '#30343a' }}>
+        {form.subject || form.id}
+      </Typography>
+      {form.assignedTo && (
+        <Box sx={{ display: 'flex', flexShrink: 0, pl: 1 }}>
+          {form.assignedTo.split(',').map((assignee, index) => {
+            const name = assignee.trim();
+            return (
+              <Avatar
+                key={`${name}-${index}`}
+                title={name}
+                sx={{
+                  width: 27,
+                  height: 27,
+                  ml: index > 0 ? -0.75 : 0,
+                  border: '2px solid #fff',
+                  bgcolor: '#687177',
+                  color: '#fff',
+                  fontSize: 10,
+                  fontWeight: 600,
+                }}
+              >
+                {getInitials(name)}
+              </Avatar>
+            );
+          })}
+        </Box>
+      )}
+    </Box>
+    {form.comment && (
+      <Typography sx={{ fontSize: 14, lineHeight: 1.45, color: '#4b535a', mb: 1.5 }}>
+        {form.comment}
+      </Typography>
+    )}
+    <Button
+      variant="outlined"
+      size="small"
+      sx={{
+        minWidth: 45,
+        height: 24,
+        px: 1,
+        borderRadius: '4px',
+        borderColor: '#c7cdd1',
+        color: '#4b535a',
+        fontSize: 12,
+        textTransform: 'none',
+        '&:hover': { borderColor: '#8a9296', backgroundColor: '#f8fafb' },
+      }}
+    >
+      {form.status || 'Open'}
+    </Button>
+  </Box>
+);
+
+const TEST_FORM_GROUPS = [
+  { key: 'open', label: 'Open', panelTitle: 'Open forms', status: 'Open', count: 34 },
+  { key: 'closed', label: 'Closed', panelTitle: 'Closed forms', status: 'Closed', count: 290 },
+  { key: 'review', label: 'In review', panelTitle: 'In review forms', status: 'In review', count: 123 },
+];
+
+const MOCK_FORM_SUBJECTS = [
+  'Duct penetration through girder',
+  'Conduit conflict at bearing',
+  'Drainage pipe vs. stiffener',
+  'Railing post clearance',
+  'Light pole base overlap',
+  'Cable tray routing conflict',
+];
+
+const MOCK_FORM_ASSIGNEES = [
+  'Dan Sheldon, Sara Seixas',
+  'Jeanlouise Hornberger',
+  'Sara Seixas, Jeanlouise Hornberger',
+  'Dan Sheldon',
+];
+
+const MOCK_FORM_DESCRIPTIONS = [
+  'Supply duct passes through the web of the main girder. Confirm whether a reinforced opening is allowed or reroute below the bottom flange.',
+  'Conduit run conflicts with the bearing assembly at Pier 3.',
+  'Storm drain pipe intersects the transverse stiffener by roughly 2 in. Structural to advise on a coped stiffener or the pipe to shift east.',
+  'Railing post anchor overlaps the deck drain inlet. Need a revised post spacing from the architect.',
+  'Light pole base plate clashes with the edge-of-deck conduit. Electrical to relocate the junction box.',
+  'Cable tray elevation is too low and hits the cross frame. Raise the tray 6 in. or split it around the frame.',
+  'Waiting on the fabricator to confirm the bolt pattern before closing.',
+  'Fire standpipe riser runs into the expansion joint armor. Coordinate a flexible connection at the joint.',
+  'Sign structure footing overlaps the utility vault. Civil to verify the as-built vault location from the survey.',
+  'Minor overlap between the bridge rail and the barrier reinforcement. Likely acceptable, pending engineer sign-off.',
+  'Traffic signal mast arm conflicts with the overhead catenary support. Transit authority review required.',
+  'Duplicate of an earlier clash on the north approach. Keep for tracking until the model is updated.',
+  'Expansion joint seal geometry intersects the approach slab rebar. Detailing team to issue a revised section.',
+  'Sanitary sewer crossing is within the minimum clearance of the abutment piles. Geotech to confirm the pile layout.',
+  'Inspection walkway grating hits the utility hanger rods at three locations along Span 2.',
+  'Scupper downspout routes directly through the pier cap. Propose an external leader along the column face.',
+];
+
+// Seeded so each form keeps the same "random" description across reloads.
+const seededRandom = (seed) => {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = Math.imul(31, hash) + seed.charCodeAt(i);
+  }
+  let t = (hash >>> 0) + 0x6d2b79f5;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+
+const TEST_FORMS = TEST_FORM_GROUPS.flatMap((group) =>
+  Array.from({ length: group.count }, (_, index) => {
+    const id = `${group.key.toUpperCase()}-FORM-${String(index + 1).padStart(3, '0')}`;
+    return {
+      id,
+      subject: MOCK_FORM_SUBJECTS[index % MOCK_FORM_SUBJECTS.length],
+      comment: MOCK_FORM_DESCRIPTIONS[Math.floor(seededRandom(id) * MOCK_FORM_DESCRIPTIONS.length)],
+      status: group.status,
+      assignedTo: MOCK_FORM_ASSIGNEES[index % MOCK_FORM_ASSIGNEES.length],
+    };
+  })
+);
+
+// Approximate site origins (lat, long, elevation in meters) for each prototype iModel.
+const IMODEL_SITE_ORIGINS = {
+  liberty: { latitude: 40.43365, longitude: -79.99962, elevation: 236.4 },
+  ppg: { latitude: 40.44071, longitude: -80.00287, elevation: 229.8 },
+  roberto: { latitude: 40.44628, longitude: -80.00335, elevation: 222.6 },
+};
+
+const getClashLocation = (clash, iModel = '') => {
+  if (!clash) return null;
+  const model = iModel.toLowerCase();
+  const origin = model.includes('liberty')
+    ? IMODEL_SITE_ORIGINS.liberty
+    : model.includes('ppg') || model.includes('tied')
+      ? IMODEL_SITE_ORIGINS.ppg
+      : IMODEL_SITE_ORIGINS.roberto;
+  const seed = `${iModel}:${clash.id}`;
+  return {
+    latitude: (origin.latitude + (seededRandom(`${seed}:lat`) - 0.5) * 0.0012).toFixed(14),
+    longitude: (origin.longitude + (seededRandom(`${seed}:lng`) - 0.5) * 0.0012).toFixed(14),
+    elevation: (origin.elevation + seededRandom(`${seed}:elev`) * 18).toFixed(14),
+  };
+};
 
 const getClashForms = (clash) => {
   if (Array.isArray(clash.forms) && clash.forms.length > 0) {
@@ -771,6 +1020,8 @@ const ClashTestDetail = () => {
   const [selectedClashId, setSelectedClashId] = useState(null);
   const [checkedIds, setCheckedIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTagFilters, setSelectedTagFilters] = useState([]);
+  const [tagFilterAnchorEl, setTagFilterAnchorEl] = useState(null);
 
   // Clustering state (matching default.png and clusters.png)
   const [clusterBy, setClusterBy] = useState(null);
@@ -814,6 +1065,10 @@ const ClashTestDetail = () => {
   // Accordion states when a clash IS selected
   const [clashDetailsOpen, setClashDetailsOpen] = useState(true);
   const [clashFormsOpen, setClashFormsOpen] = useState(false);
+  const [selectedFormId, setSelectedFormId] = useState(null);
+  // Comments, attachments, and history per form ID. Forms can be shared by
+  // several clashes, so activity lives here rather than on each clash copy.
+  const [formActivity, setFormActivity] = useState({});
   const [clashImagesOpen, setClashImagesOpen] = useState(false);
   const [clashImages, setClashImages] = useState({});
   const [imageUploadOpen, setImageUploadOpen] = useState(false);
@@ -838,6 +1093,24 @@ const ClashTestDetail = () => {
   const [testDetailsOpen, setTestDetailsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(true);
   const [testFormsOpen, setTestFormsOpen] = useState(false);
+  const [formsPanelGroupKey, setFormsPanelGroupKey] = useState(null);
+  const formsPanelGroup = TEST_FORM_GROUPS.find((group) => group.key === formsPanelGroupKey) || null;
+  const [formsPanelSearch, setFormsPanelSearch] = useState('');
+  const formsPanelForms = formsPanelGroup
+    ? TEST_FORMS.filter((form) => form.status === formsPanelGroup.status)
+    : [];
+  const formsPanelQuery = formsPanelSearch.trim().toLowerCase();
+  const filteredFormsPanelForms = formsPanelQuery
+    ? formsPanelForms.filter((form) =>
+        [form.subject, form.comment, form.assignedTo, form.id]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(formsPanelQuery))
+      )
+    : formsPanelForms;
+  const openFormsPanel = (groupKey) => {
+    setFormsPanelSearch('');
+    setFormsPanelGroupKey(groupKey);
+  };
   const [historyOpen, setHistoryOpen] = useState(false);
 
   // Suppression rules state (matching rules applied while test was built)
@@ -1211,6 +1484,29 @@ const ClashTestDetail = () => {
     (t) => t.name.toLowerCase() === tagFilterQuery.trim().toLowerCase()
   );
   const tagPopoverCanCreate = tagFilterQuery.trim().length > 0 && !tagPopoverExactMatch;
+  const projectTagOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...tsTagList.map((tag) => tag.name),
+          ...clashes.flatMap((clash) => clash.tags || []),
+        ])
+      ).sort((a, b) => a.localeCompare(b)),
+    [clashes, tsTagList]
+  );
+
+  const handleToggleTagFilter = (tagName) => {
+    setSelectedTagFilters((current) =>
+      current.includes(tagName)
+        ? current.filter((selectedTag) => selectedTag !== tagName)
+        : [...current, tagName]
+    );
+  };
+  const hasActiveTableFilters = selectedTagFilters.length > 0;
+  const handleClearAllFilters = () => {
+    setSelectedTagFilters([]);
+    setTagFilterAnchorEl(null);
+  };
 
   // Live count of how many clashes each tag is actually applied to
   const tsTagUsageCounts = useMemo(() => {
@@ -1284,6 +1580,127 @@ const ClashTestDetail = () => {
   const primarySelectedClashId = selectedClashId || checkedIds[0] || null;
   const currentClash = primarySelectedClashId ? clashes.find((c) => c.id === primarySelectedClashId) || null : null;
   const currentClashForms = currentClash ? getClashForms(currentClash) : [];
+  const selectedFormClashes = useMemo(
+    () =>
+      selectedFormId
+        ? clashes.filter((clash) => getClashForms(clash).some((form) => form.id === selectedFormId))
+        : [],
+    [clashes, selectedFormId]
+  );
+  const selectedForm = selectedFormClashes.length > 0
+    ? getClashForms(selectedFormClashes[0]).find((form) => form.id === selectedFormId)
+    : null;
+  const selectedFormElements = useMemo(
+    () => [...new Set(selectedFormClashes.flatMap((clash) => [clash.elementA, clash.elementB]).filter(Boolean))],
+    [selectedFormClashes]
+  );
+  const selectedFormLocation = useMemo(
+    () => getClashLocation(selectedFormClashes[0], testData.iModel || ''),
+    [selectedFormClashes, testData.iModel]
+  );
+
+  const appendFormActivity = (formId, { comments = [], attachments = [], history = [] }) => {
+    setFormActivity((prev) => {
+      const existing = prev[formId] || { comments: [], attachments: [], history: [] };
+      return {
+        ...prev,
+        [formId]: {
+          comments: [...existing.comments, ...comments],
+          attachments: [...existing.attachments, ...attachments],
+          history: [...existing.history, ...history],
+        },
+      };
+    });
+  };
+
+  const makeHistoryEntry = (action, at = new Date().toISOString()) => ({
+    id: `history-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    user: CURRENT_USER_NAME,
+    action,
+    at,
+  });
+
+  const handleSaveSelectedForm = (draft) => {
+    if (!selectedForm) return;
+    const fieldLabels = [
+      ['subject', 'subject'],
+      ['comment', 'description'],
+      ['status', 'status'],
+      ['assignedTo', 'assignee'],
+      ['dueDate', 'due date'],
+    ];
+    const changes = fieldLabels.filter(([key]) => (draft[key] || '') !== (selectedForm[key] || ''));
+    if (changes.length === 0) return;
+
+    const updates = Object.fromEntries(changes.map(([key]) => [key, (draft[key] || '').trim()]));
+    setClashes((prev) =>
+      prev.map((clash) => {
+        const forms = getClashForms(clash);
+        if (!forms.some((form) => form.id === selectedForm.id)) return clash;
+        const isLatestForm = clash.formId === selectedForm.id;
+        return {
+          ...clash,
+          forms: forms.map((form) => (form.id === selectedForm.id ? { ...form, ...updates } : form)),
+          ...(isLatestForm && {
+            ...('subject' in updates && { subject: updates.subject }),
+            ...('comment' in updates && { comment: updates.comment }),
+            ...('status' in updates && { formStatus: updates.status }),
+            ...('assignedTo' in updates && { assignedTo: updates.assignedTo }),
+            ...('dueDate' in updates && { dueDate: updates.dueDate }),
+          }),
+        };
+      })
+    );
+
+    appendFormActivity(selectedForm.id, {
+      history: changes.map(([key, label]) =>
+        makeHistoryEntry(updates[key] ? `Changed ${label} to "${updates[key]}"` : `Cleared ${label}`)
+      ),
+    });
+  };
+
+  const handleAddFormComment = (text) => {
+    if (!selectedForm) return;
+    const createdAt = new Date().toISOString();
+    appendFormActivity(selectedForm.id, {
+      comments: [{ id: `comment-${Date.now()}`, author: CURRENT_USER_NAME, text, createdAt }],
+      history: [makeHistoryEntry('Added a comment', createdAt)],
+    });
+  };
+
+  const handleAddFormAttachments = (files) => {
+    if (!selectedForm) return;
+    const attachedAt = new Date().toISOString();
+    appendFormActivity(selectedForm.id, {
+      attachments: files.map((file, index) => ({
+        id: `attachment-${Date.now()}-${index}`,
+        name: file.name,
+        type: file.type ? file.type.split('/').pop().toUpperCase() : file.name.split('.').pop().toUpperCase(),
+        size: file.size,
+        url: URL.createObjectURL(file),
+        attachedBy: CURRENT_USER_NAME,
+        attachedAt,
+      })),
+      history: files.map((file) => makeHistoryEntry(`Attached ${file.name}`, attachedAt)),
+    });
+  };
+
+  const handleRemoveFormAttachment = (attachment) => {
+    if (!selectedForm) return;
+    if (attachment.url) URL.revokeObjectURL(attachment.url);
+    setFormActivity((prev) => {
+      const existing = prev[selectedForm.id];
+      if (!existing) return prev;
+      return {
+        ...prev,
+        [selectedForm.id]: {
+          ...existing,
+          attachments: existing.attachments.filter((item) => item.id !== attachment.id),
+          history: [...existing.history, makeHistoryEntry(`Removed ${attachment.name}`)],
+        },
+      };
+    });
+  };
   const hasClashSelected = Boolean(selectedClashId && currentClash);
   const selectedModelClashes = useMemo(() => {
     const selectedIds = checkedIds.length > 0 ? checkedIds : selectedClashId ? [selectedClashId] : [];
@@ -1657,15 +2074,30 @@ const ClashTestDetail = () => {
     if (targetRows.length === 0) return;
 
     const sharedFormId = `FORM-${Date.now()}`;
+    const createdAt = new Date().toISOString();
+    const existingFormCount = new Set(clashes.flatMap((c) => getClashForms(c).map((form) => form.id))).size;
     const newForm = {
       id: sharedFormId,
+      number: `FRM-${String(existingFormCount + 1).padStart(5, '0')}`,
       formTemplate: formTemplate || '',
       subject: subject || '',
       status: formStatus || 'Open',
       assignedTo: assignedTo || 'Jeanlouise Hornberger',
       dueDate: dueDate || '',
       comment: comment || '',
+      createdBy: CURRENT_USER_NAME,
+      createdAt,
     };
+
+    appendFormActivity(sharedFormId, {
+      history: [
+        makeHistoryEntry(
+          `Created the form on ${targetRows.length === 1 ? targetRows[0] : `${targetRows.length} clashes`}`,
+          createdAt
+        ),
+        makeHistoryEntry(`Assigned to ${newForm.assignedTo}`, createdAt),
+      ],
+    });
 
     setClashes((prev) =>
       prev.map((c) => {
@@ -1859,7 +2291,8 @@ const ClashTestDetail = () => {
         c.elementA.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.elementB.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.status.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    )
+    .filter((c) => selectedTagFilters.every((tagName) => (c.tags || []).includes(tagName)));
 
   const clusterGroups = useMemo(() => {
     return getClusterGroups(filteredClashes, clusterBy);
@@ -2720,6 +3153,22 @@ const ClashTestDetail = () => {
 
             {/* Right Search and Cluster Controls */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {hasActiveTableFilters && (
+                <Button
+                  size="small"
+                  onClick={handleClearAllFilters}
+                  startIcon={<ClearIcon sx={{ fontSize: 15 }} />}
+                  sx={{
+                    textTransform: 'none',
+                    color: '#344046',
+                    fontSize: 12.5,
+                    px: 1,
+                    minWidth: 'auto',
+                  }}
+                >
+                  Clear all filters
+                </Button>
+              )}
               <Button
                 variant="outlined"
                 size="small"
@@ -2872,14 +3321,6 @@ const ClashTestDetail = () => {
                             <KeyboardArrowUpIcon sx={{ fontSize: 18 }} />
                           )}
                         </IconButton>
-                        <LocalOfferOutlinedIcon
-                          sx={{
-                            fontSize: 16,
-                            color: '#536066',
-                            mr: 1,
-                            transform: 'scaleX(-1)',
-                          }}
-                        />
                         <Typography sx={{ fontWeight: 600, fontSize: 13, color: '#1c1f21' }}>
                           {group.name}
                         </Typography>
@@ -2938,11 +3379,11 @@ const ClashTestDetail = () => {
                                 }}
                               />
                             </TableCell>
-                            <TableCell>ID</TableCell>
-                            <TableCell>Element A</TableCell>
-                            <TableCell>Element B</TableCell>
-                            <TableCell>Status</TableCell>
-                            <TableCell>Model A</TableCell>
+                            <FilterableTableHeader>ID</FilterableTableHeader>
+                            <FilterableTableHeader>Element A</FilterableTableHeader>
+                            <FilterableTableHeader>Element B</FilterableTableHeader>
+                            <FilterableTableHeader>Status</FilterableTableHeader>
+                            <FilterableTableHeader>Model A</FilterableTableHeader>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -3054,8 +3495,21 @@ const ClashTestDetail = () => {
           ) : (
             /* Clashes Table (Default / Unclustered) */
             <>
-              <TableContainer sx={{ flex: 1 }}>
-                <Table size="small" sx={{ '& .MuiTableCell-root': { fontSize: 12.5, borderBottom: '1px solid #eaedf0', py: 0.85 } }}>
+              <TableContainer sx={{ flex: 1, overflowX: 'auto' }}>
+                <Table
+                  size="small"
+                  sx={{
+                    width: '100%',
+                    minWidth: 1450,
+                    tableLayout: 'fixed',
+                    '& .MuiTableCell-root': {
+                      fontSize: 12.5,
+                      borderBottom: '1px solid #eaedf0',
+                      overflow: 'hidden',
+                      py: 0.85,
+                    },
+                  }}
+                >
                   <TableHead>
                     <TableRow sx={{ '& .MuiTableCell-root': { fontWeight: 600, color: '#4a555b', borderBottom: '1.5px solid #c2c9cd' } }}>
                       <TableCell padding="checkbox">
@@ -3067,16 +3521,41 @@ const ClashTestDetail = () => {
                         />
                       </TableCell>
                       {visibleColumns.map((column) => (
-                        <TableCell key={column.key}>{column.label}</TableCell>
+                        <FilterableTableHeader
+                          key={column.key}
+                          sx={{ width: column.width }}
+                          onFilterClick={
+                            column.key === 'tags'
+                              ? (event) => {
+                                  event.stopPropagation();
+                                  setTagFilterAnchorEl(event.currentTarget);
+                                }
+                              : undefined
+                          }
+                          filterActive={column.key === 'tags' && selectedTagFilters.length > 0}
+                          filterLabel={column.key === 'tags' ? 'Filter by tags' : undefined}
+                        >
+                          {column.label}
+                        </FilterableTableHeader>
                       ))}
-                      <TableCell align="right" sx={{ width: 36 }}>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          position: 'sticky',
+                          right: 0,
+                          zIndex: 2,
+                          width: 40,
+                          backgroundColor: '#fff',
+                        }}
+                      >
                         <Tooltip title="Manage columns">
                           <IconButton
+                            aria-label="Manage columns"
                             size="small"
                             onClick={handleOpenColumnMenu}
-                            sx={{ color: '#536066', p: 0.2 }}
+                            sx={{ color: '#536066', p: 0.25 }}
                           >
-                            <ViewWeekOutlinedIcon sx={{ fontSize: 16 }} />
+                            <ColumnManagerIcon sx={{ fontSize: 21 }} />
                           </IconButton>
                         </Tooltip>
                       </TableCell>
@@ -3113,13 +3592,80 @@ const ClashTestDetail = () => {
                               {column.render(clash)}
                             </TableCell>
                           ))}
-                          <TableCell align="right" />
+                          <TableCell
+                            align="right"
+                            sx={{
+                              position: 'sticky',
+                              right: 0,
+                              backgroundColor: 'inherit',
+                            }}
+                          />
                         </TableRow>
                       );
                     })}
                   </TableBody>
                 </Table>
               </TableContainer>
+
+              <Menu
+                anchorEl={tagFilterAnchorEl}
+                open={Boolean(tagFilterAnchorEl)}
+                onClose={() => setTagFilterAnchorEl(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                PaperProps={{
+                  sx: {
+                    mt: 0.5,
+                    minWidth: 220,
+                    maxHeight: 320,
+                    border: '1px solid #c2c9cd',
+                    borderRadius: '6px',
+                    boxShadow: '0 6px 20px rgba(0,0,0,0.12)',
+                  },
+                }}
+              >
+                <Box sx={{ px: 1.5, py: 0.75 }}>
+                  <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#657075' }}>
+                    Filter by tags
+                  </Typography>
+                  <Typography sx={{ fontSize: 11.5, color: '#8a9296' }}>
+                    Matches all selected tags
+                  </Typography>
+                </Box>
+                <Divider sx={{ borderColor: '#eaedf0' }} />
+                {projectTagOptions.map((tagName) => (
+                  <MenuItem
+                    key={tagName}
+                    dense
+                    onClick={() => handleToggleTagFilter(tagName)}
+                    sx={{ py: 0.25, px: 1 }}
+                  >
+                    <Checkbox
+                      size="small"
+                      checked={selectedTagFilters.includes(tagName)}
+                      sx={{
+                        p: 0.5,
+                        mr: 0.75,
+                        color: '#9fb8ae',
+                        '&.Mui-checked': { color: '#087f6c' },
+                      }}
+                    />
+                    <Typography sx={{ fontSize: 13, color: '#1c1f21' }}>{tagName}</Typography>
+                  </MenuItem>
+                ))}
+                {selectedTagFilters.length > 0 && (
+                  <>
+                    <Divider sx={{ borderColor: '#eaedf0' }} />
+                    <MenuItem
+                      dense
+                      onClick={handleClearAllFilters}
+                      sx={{ fontSize: 13, color: '#344046', py: 0.5 }}
+                    >
+                      Clear all filters
+                    </MenuItem>
+                  </>
+                )}
+              </Menu>
 
               {/* Column manager menu */}
               <Menu
@@ -3586,43 +4132,11 @@ const ClashTestDetail = () => {
                     {clashFormsOpen ? <KeyboardArrowUpIcon sx={{ fontSize: 18, color: '#536066' }} /> : <KeyboardArrowDownIcon sx={{ fontSize: 18, color: '#536066' }} />}
                   </Box>
                   <Collapse in={clashFormsOpen}>
-                    <Box sx={{ px: 2.5, pb: 2, pt: 0.5 }}>
+                    <Box sx={{ px: 1, pb: 2, pt: 0.5 }}>
                       {currentClashForms.length > 0 ? (
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                           {currentClashForms.map((form) => (
-                            <Box key={form.id} sx={{ p: 1.5, backgroundColor: '#f8fafb', borderRadius: '4px', border: '1px solid #e0e4e6' }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
-                                <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                                  {form.subject || form.id}
-                                </Typography>
-                                <Chip
-                                  label={form.status || 'Open'}
-                                  size="small"
-                                  sx={{
-                                    height: 20,
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    backgroundColor: '#e6f4ea',
-                                    color: '#137333',
-                                  }}
-                                />
-                              </Box>
-                              {form.assignedTo && (
-                                <Typography sx={{ fontSize: 12, color: '#536066', mb: 0.5 }}>
-                                  <span style={{ fontWeight: 500, color: '#1c1f21' }}>Assigned to:</span> {form.assignedTo}
-                                </Typography>
-                              )}
-                              {form.dueDate && (
-                                <Typography sx={{ fontSize: 12, color: '#536066', mb: 0.5 }}>
-                                  <span style={{ fontWeight: 500, color: '#1c1f21' }}>Due date:</span> {form.dueDate}
-                                </Typography>
-                              )}
-                              {form.comment && (
-                                <Typography sx={{ fontSize: 12, color: '#657075', mt: 0.5, fontStyle: 'italic' }}>
-                                  "{form.comment}"
-                                </Typography>
-                              )}
-                            </Box>
+                            <FormCard key={form.id} form={form} onClick={() => setSelectedFormId(form.id)} />
                           ))}
                         </Box>
                       ) : (
@@ -3870,51 +4384,29 @@ const ClashTestDetail = () => {
                   </Box>
                   <Collapse in={testFormsOpen}>
                     <Box sx={{ px: 2.5, pb: 2.5, pt: 0.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <Box>
-                        <Typography sx={{ fontSize: 12, color: '#657075', fontWeight: 500 }}>Open</Typography>
-                        <Link
-                          underline="always"
-                          sx={{
-                            color: '#087f6c',
-                            fontSize: 13,
-                            cursor: 'pointer',
-                            mt: 0.25,
-                            display: 'inline-block',
-                          }}
-                        >
-                          34 forms
-                        </Link>
-                      </Box>
-                      <Box>
-                        <Typography sx={{ fontSize: 12, color: '#657075', fontWeight: 500 }}>Closed</Typography>
-                        <Link
-                          underline="always"
-                          sx={{
-                            color: '#087f6c',
-                            fontSize: 13,
-                            cursor: 'pointer',
-                            mt: 0.25,
-                            display: 'inline-block',
-                          }}
-                        >
-                          290 forms
-                        </Link>
-                      </Box>
-                      <Box>
-                        <Typography sx={{ fontSize: 12, color: '#657075', fontWeight: 500 }}>Waiting review</Typography>
-                        <Link
-                          underline="always"
-                          sx={{
-                            color: '#087f6c',
-                            fontSize: 13,
-                            cursor: 'pointer',
-                            mt: 0.25,
-                            display: 'inline-block',
-                          }}
-                        >
-                          123 forms
-                        </Link>
-                      </Box>
+                      {TEST_FORM_GROUPS.map((group) => {
+                        const count = TEST_FORMS.filter((form) => form.status === group.status).length;
+                        return (
+                          <Box key={group.key}>
+                            <Typography sx={{ fontSize: 12, color: '#657075', fontWeight: 500 }}>{group.label}</Typography>
+                            <Link
+                              component="button"
+                              type="button"
+                              underline="always"
+                              onClick={() => openFormsPanel(group.key)}
+                              sx={{
+                                color: '#087f6c',
+                                fontSize: 13,
+                                cursor: 'pointer',
+                                mt: 0.25,
+                                display: 'inline-block',
+                              }}
+                            >
+                              {count} {count === 1 ? 'form' : 'forms'}
+                            </Link>
+                          </Box>
+                        );
+                      })}
                     </Box>
                   </Collapse>
                 </Box>
@@ -5119,6 +5611,107 @@ const ClashTestDetail = () => {
           <Button variant="contained" onClick={saveMarkup} disabled={!markupImage?.previewUrl} sx={{ textTransform: 'none', bgcolor: '#087f6c', '&:hover': { bgcolor: '#066657' } }}>Save markups</Button>
         </DialogActions>
       </Dialog>
+
+      <Drawer
+        anchor="right"
+        open={Boolean(formsPanelGroup)}
+        onClose={() => setFormsPanelGroupKey(null)}
+        slotProps={{ backdrop: { sx: { backgroundColor: 'transparent' } } }}
+        PaperProps={{
+          sx: {
+            width: { xs: '100%', sm: 392 },
+            maxWidth: '100vw',
+            boxShadow: '0 8px 24px rgba(28, 31, 33, 0.22)',
+            display: 'flex',
+            flexDirection: 'column',
+          },
+        }}
+      >
+        {formsPanelGroup && (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', px: 2, pt: 2, pb: 1.25 }}>
+              <Box>
+                <Typography component="h2" sx={{ fontSize: 20, lineHeight: 1.3, color: '#30343a' }}>
+                  {formsPanelGroup.panelTitle}
+                </Typography>
+                <Typography sx={{ fontSize: 13, color: '#657075' }}>
+                  {formsPanelQuery
+                    ? `${filteredFormsPanelForms.length} of ${formsPanelForms.length} forms`
+                    : `${formsPanelForms.length} ${formsPanelForms.length === 1 ? 'form' : 'forms'}`}
+                </Typography>
+              </Box>
+              <IconButton
+                size="small"
+                aria-label={`Close ${formsPanelGroup.panelTitle.toLowerCase()}`}
+                onClick={() => setFormsPanelGroupKey(null)}
+                sx={{ color: '#30343a', mt: -0.25 }}
+              >
+                <CloseIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            </Box>
+            <Box sx={{ px: 2, pb: 2 }}>
+              <TextField
+                placeholder="Find a form"
+                size="small"
+                fullWidth
+                value={formsPanelSearch}
+                onChange={(e) => setFormsPanelSearch(e.target.value)}
+                inputProps={{ 'aria-label': `Search ${formsPanelGroup.panelTitle.toLowerCase()}` }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: 18, color: '#8a9296' }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: formsPanelSearch ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        aria-label="Clear search"
+                        onClick={() => setFormsPanelSearch('')}
+                        sx={{ p: 0.25, color: '#8a9296' }}
+                      >
+                        <ClearIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    height: 32,
+                    fontSize: 13,
+                    borderRadius: '4px',
+                    '& fieldset': { borderColor: '#c2c9cd' },
+                  },
+                }}
+              />
+            </Box>
+            <Box sx={{ flex: 1, overflowY: 'auto', px: 2, pb: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {filteredFormsPanelForms.map((form) => (
+                <FormCard key={form.id} form={form} />
+              ))}
+              {filteredFormsPanelForms.length === 0 && (
+                <Typography sx={{ fontSize: 13, color: '#657075', textAlign: 'center', py: 4 }}>
+                  No forms match “{formsPanelSearch.trim()}”
+                </Typography>
+              )}
+            </Box>
+          </>
+        )}
+      </Drawer>
+
+      <FormDetailPanel
+        form={selectedForm}
+        elements={selectedFormElements}
+        location={selectedFormLocation}
+        activity={selectedForm ? formActivity[selectedForm.id] : null}
+        currentUser={CURRENT_USER_NAME}
+        onClose={() => setSelectedFormId(null)}
+        onSaveForm={handleSaveSelectedForm}
+        onAddComment={handleAddFormComment}
+        onAddAttachments={handleAddFormAttachments}
+        onRemoveAttachment={handleRemoveFormAttachment}
+      />
 
       {/* Suppression Rules Drawer matching Screenshot 2 */}
       <SuppressionRulesDrawer

@@ -22,7 +22,7 @@ import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import CheckIcon from '@mui/icons-material/Check';
 
-const TEAM_MEMBERS = [
+export const TEAM_MEMBERS = [
   'Jeanlouise Hornberger',
   'Alex Chen',
   'Sarah Miller',
@@ -31,7 +31,7 @@ const TEAM_MEMBERS = [
   'Michael Chang',
 ];
 
-const FORM_STATUS_OPTIONS = ['Open', 'In Review', 'Closed', 'Draft'];
+export const FORM_STATUS_OPTIONS = ['Open', 'In Review', 'Closed', 'Draft'];
 const FORM_TEMPLATE_OPTIONS = ['General Clash Form', 'Design Review', 'Coordination Issue'];
 
 const DEFAULT_COMMENT =

@@ -14,6 +14,9 @@ import {
   Tooltip,
   Checkbox,
   Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   LinearProgress,
   Divider,
   InputAdornment,
@@ -30,6 +33,7 @@ import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined';
@@ -74,6 +78,8 @@ const MODEL_NAME_OPTIONS = [
   'Columns',
 ];
 
+const PROPERTY_OPERATOR_OPTIONS = ['equal to', 'not equal to', 'like'];
+
 const PROPERTY_NAME_OPTIONS = [
   'BBoxhigh',
   'BBoxlow',
@@ -93,6 +99,27 @@ const CLASS_NAME_OPTIONS = [
   'Electrical',
   'Plumbing',
 ];
+
+// Mock ECSchemas and the classes each one defines, used by the Class rule type.
+const SCHEMA_CLASS_OPTIONS = {
+  BisCore: ['PhysicalElement', 'SpatialLocationElement', 'GeometricElement3d', 'DrawingGraphic'],
+  Generic: ['PhysicalObject', 'SpatialLocation', 'Graphic3d'],
+  ArchitecturalPhysical: ['Wall', 'Door', 'Window', 'Slab', 'Roof', 'Stair'],
+  StructuralPhysical: ['Beam', 'Column', 'Slab', 'Footing', 'Brace'],
+  ProcessPhysical: ['Pipe', 'PipeFitting', 'Valve', 'Duct', 'Pump'],
+  ElectricalPhysical: ['CableTray', 'Conduit', 'LightFixture', 'Panel'],
+};
+const SCHEMA_OPTIONS = Object.keys(SCHEMA_CLASS_OPTIONS);
+
+// Returns [schema, class] for a saved rule, dropping values that don't exist
+// in the schema list (e.g. legacy class-only rules).
+const resolveSchemaClass = (schema, className) => {
+  const resolvedSchema = SCHEMA_CLASS_OPTIONS[schema]
+    ? schema
+    : SCHEMA_OPTIONS.find((s) => SCHEMA_CLASS_OPTIONS[s].includes(className)) || '';
+  const resolvedClass = resolvedSchema && SCHEMA_CLASS_OPTIONS[resolvedSchema].includes(className) ? className : '';
+  return [resolvedSchema, resolvedClass];
+};
 
 // Mock rules available for import from different clash tests
 const MOCK_TEST_RULES = {
@@ -384,13 +411,26 @@ const SuppressionRulesDrawer = ({
 
   // Condition fields for Property
   const [property1, setProperty1] = useState('@Design');
+  const [propertyOperator1, setPropertyOperator1] = useState('equal to');
   const [propertyVal1, setPropertyVal1] = useState('36');
   const [property2, setProperty2] = useState('@Window');
+  const [propertyOperator2, setPropertyOperator2] = useState('equal to');
   const [propertyVal2, setPropertyVal2] = useState('42');
 
   // Condition fields for Class
-  const [class1, setClass1] = useState('@Design');
-  const [class2, setClass2] = useState('@Window');
+  const [schema1, setSchema1] = useState('');
+  const [class1, setClass1] = useState('');
+  const [schema2, setSchema2] = useState('');
+  const [class2, setClass2] = useState('');
+
+  const applySchemaClass = (schemaA, classA, schemaB, classB) => {
+    const [s1, c1] = resolveSchemaClass(schemaA, classA);
+    const [s2, c2] = resolveSchemaClass(schemaB, classB);
+    setSchema1(s1);
+    setClass1(c1);
+    setSchema2(s2);
+    setClass2(c2);
+  };
 
   // Condition fields for Group
   const [selectedGroup, setSelectedGroup] = useState('Plumbing');
@@ -437,11 +477,17 @@ const SuppressionRulesDrawer = ({
       setNameMatchOperator2(initialCreateRule.nameMatchOperator2 || 'matches');
       setIsDualCondition(Boolean(initialCreateRule.isDualCondition));
       setProperty1(initialCreateRule.property1 || '@Design');
+      setPropertyOperator1(initialCreateRule.propertyOperator1 || 'equal to');
       setPropertyVal1(initialCreateRule.propertyVal1 || '36');
       setProperty2(initialCreateRule.property2 || '@Window');
+      setPropertyOperator2(initialCreateRule.propertyOperator2 || 'equal to');
       setPropertyVal2(initialCreateRule.propertyVal2 || '42');
-      setClass1(initialCreateRule.class1 || 'Structural');
-      setClass2(initialCreateRule.class2 || 'Architectural');
+      const [s1, c1] = resolveSchemaClass(initialCreateRule.schema1, initialCreateRule.class1);
+      const [s2, c2] = resolveSchemaClass(initialCreateRule.schema2, initialCreateRule.class2);
+      setSchema1(s1);
+      setClass1(c1);
+      setSchema2(s2);
+      setClass2(c2);
       setSelectedGroup(initialCreateRule.selectedGroup || 'Plumbing');
       setRelSourceClass(initialCreateRule.relSourceClass || '@Design');
       setRelTargetClass(initialCreateRule.relTargetClass || '@Window');
@@ -469,11 +515,12 @@ const SuppressionRulesDrawer = ({
     setNameMatchOperator2('matches');
     setIsDualCondition(true);
     setProperty1('BBoxhigh');
+    setPropertyOperator1('equal to');
     setPropertyVal1('34');
     setProperty2('BBoxlow');
+    setPropertyOperator2('equal to');
     setPropertyVal2('42');
-    setClass1('@Design');
-    setClass2('@Window');
+    applySchemaClass('', '', '', '');
     setSelectedGroup('Plumbing');
     setRelSourceClass('@Design');
     setRelTargetClass('@Window');
@@ -516,10 +563,14 @@ const SuppressionRulesDrawer = ({
       nameMatchOperator2,
       isDualCondition,
       property1,
+      propertyOperator1,
       propertyVal1,
       property2,
+      propertyOperator2,
       propertyVal2,
+      schema1,
       class1,
+      schema2,
       class2,
       selectedGroup,
       testName,
@@ -590,8 +641,10 @@ const SuppressionRulesDrawer = ({
           rule.nameMatchOperator1,
           rule.nameMatchOperator2,
           rule.property1,
+          rule.propertyOperator1,
           rule.propertyVal1,
           rule.property2,
+          rule.propertyOperator2,
           rule.propertyVal2,
           rule.class1,
           rule.class2,
@@ -684,6 +737,21 @@ const SuppressionRulesDrawer = ({
     setMenuRule(null);
   };
 
+  // Select all / none is scoped to the currently visible (search-filtered) rules.
+  const visibleSelectedCount = filteredRules.filter((r) => selectedCardIds.includes(r.id)).length;
+  const allVisibleSelected = filteredRules.length > 0 && visibleSelectedCount === filteredRules.length;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+
+  const handleToggleSelectAll = () => {
+    const visibleIds = filteredRules.map((r) => r.id);
+    setSelectedCardIds((prev) =>
+      allVisibleSelected
+        ? prev.filter((id) => !visibleIds.includes(id))
+        : Array.from(new Set([...prev, ...visibleIds]))
+    );
+    setLastSelectedCardIndex(null);
+  };
+
   const handleEditRule = () => {
     if (!menuRule) return;
     setEditingRuleId(menuRule.id);
@@ -697,11 +765,12 @@ const SuppressionRulesDrawer = ({
     setNameMatchOperator2(menuRule.nameMatchOperator2 || 'matches');
     setIsDualCondition(menuRule.isDualCondition !== false);
     setProperty1(menuRule.property1 || '@Design');
+    setPropertyOperator1(menuRule.propertyOperator1 || 'equal to');
     setPropertyVal1(menuRule.propertyVal1 || '36');
     setProperty2(menuRule.property2 || '@Window');
+    setPropertyOperator2(menuRule.propertyOperator2 || 'equal to');
     setPropertyVal2(menuRule.propertyVal2 || '42');
-    setClass1(menuRule.class1 || '@Design');
-    setClass2(menuRule.class2 || '@Window');
+    applySchemaClass(menuRule.schema1, menuRule.class1, menuRule.schema2, menuRule.class2);
     setSelectedGroup(menuRule.selectedGroup || 'Plumbing');
     setRelSourceClass(menuRule.relSourceClass || '@Design');
     setRelTargetClass(menuRule.relTargetClass || '@Window');
@@ -726,7 +795,16 @@ const SuppressionRulesDrawer = ({
     } else if (menuRule.suppressBasedOn === 'Category') {
       conditionSummary = `Category name ${menuRule.nameMatchOperator1 || 'is exactly'} ${menuRule.attribute1 || 'Pipes'}`;
     } else if (menuRule.suppressBasedOn === 'Property') {
-      conditionSummary = `Property: ${menuRule.property1 || '@Design'}=${menuRule.propertyVal1 || '36'}`;
+      conditionSummary = `Property: ${menuRule.property1 || '@Design'} ${menuRule.propertyOperator1 || 'equal to'} ${menuRule.propertyVal1 || '36'}`;
+      if (menuRule.isDualCondition && menuRule.targetScope !== 'both elements') {
+        conditionSummary += ` and ${menuRule.property2 || '@Window'} ${menuRule.propertyOperator2 || 'equal to'} ${menuRule.propertyVal2 || '42'}`;
+      }
+    } else if (menuRule.suppressBasedOn === 'Class') {
+      const formatSchemaClass = (s, c) => (s || c ? `${s || '?'}:${c || '?'}` : '?');
+      conditionSummary = `Class: ${formatSchemaClass(menuRule.schema1, menuRule.class1)}`;
+      if (menuRule.isDualCondition) {
+        conditionSummary += ` and ${formatSchemaClass(menuRule.schema2, menuRule.class2)}`;
+      }
     } else if (menuRule.suppressBasedOn === 'ECSQL expression') {
       conditionSummary = 'ECSQL custom expression';
     } else if (menuRule.suppressBasedOn === 'Relationship') {
@@ -756,6 +834,28 @@ const SuppressionRulesDrawer = ({
     link.click();
     document.body.removeChild(link);
     handleCardMenuClose();
+  };
+
+  const handleDuplicateRule = () => {
+    if (!menuRule || !onSaveRule) return;
+    onSaveRule({
+      ...menuRule,
+      id: Date.now(),
+      name: `${menuRule.name || 'Rule name'} (copy)`,
+    });
+    setHasUnsavedChanges(true);
+    handleCardMenuClose();
+  };
+
+  const [deleteSelectedDialogOpen, setDeleteSelectedDialogOpen] = useState(false);
+
+  const handleDeleteSelectedRules = () => {
+    if (!onDeleteRule || selectedCardIds.length === 0) return;
+    selectedCardIds.forEach((id) => onDeleteRule(id));
+    setSelectedCardIds([]);
+    setLastSelectedCardIndex(null);
+    setHasUnsavedChanges(true);
+    setDeleteSelectedDialogOpen(false);
   };
 
   const handleDeleteRule = () => {
@@ -1055,6 +1155,20 @@ const SuppressionRulesDrawer = ({
 
       case 'Property': {
         const isBoth = targetScope === 'both elements';
+        const renderPropertyOperatorSelect = (value, setValue) => (
+          <TextField
+            select
+            size="small"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
+            sx={{ width: 135, ...compactSelectSx }}
+          >
+            {PROPERTY_OPERATOR_OPTIONS.map((op) => (
+              <MenuItem key={op} value={op} sx={{ fontSize: 13 }}>{op}</MenuItem>
+            ))}
+          </TextField>
+        );
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75, mb: 3 }}>
             {/* Line 1 */}
@@ -1090,9 +1204,13 @@ const SuppressionRulesDrawer = ({
                 ))}
               </TextField>
 
+              <Box sx={{ flexBasis: '100%', height: 0 }} />
+
               <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                with the value
+                with a value
               </Typography>
+
+              {renderPropertyOperatorSelect(propertyOperator1, setPropertyOperator1)}
 
               <TextField
                 size="small"
@@ -1133,8 +1251,10 @@ const SuppressionRulesDrawer = ({
                 </TextField>
 
                 <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                  with the value
+                  with a value
                 </Typography>
+
+                {renderPropertyOperatorSelect(propertyOperator2, setPropertyOperator2)}
 
                 <TextField
                   size="small"
@@ -1158,26 +1278,66 @@ const SuppressionRulesDrawer = ({
       }
 
       case 'Class': {
+        const schemaClassSelectSx = {
+          width: 140,
+          ...compactSelectSx,
+        };
+        const placeholder = <span style={{ color: '#8a9296' }}>Select</span>;
+        const renderSchemaClassRow = (label, schema, setSchema, className, setClassName) => (
+          <>
+            <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
+              {label}
+            </Typography>
+            <TextField
+              select
+              size="small"
+              value={schema}
+              onChange={(e) => {
+                setSchema(e.target.value);
+                setClassName('');
+              }}
+              SelectProps={{
+                IconComponent: KeyboardArrowDownIcon,
+                displayEmpty: true,
+                renderValue: (v) => v || placeholder,
+              }}
+              sx={{ ...schemaClassSelectSx, width: 175 }}
+            >
+              {SCHEMA_OPTIONS.map((s) => (
+                <MenuItem key={s} value={s} sx={{ fontSize: 13 }}>{s}</MenuItem>
+              ))}
+            </TextField>
+            <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
+              and a class of
+            </Typography>
+            <Tooltip title={schema ? '' : 'Select a schema first'}>
+              <span>
+                <TextField
+                  select
+                  size="small"
+                  value={className}
+                  disabled={!schema}
+                  onChange={(e) => setClassName(e.target.value)}
+                  SelectProps={{
+                    IconComponent: KeyboardArrowDownIcon,
+                    displayEmpty: true,
+                    renderValue: (v) => v || placeholder,
+                  }}
+                  sx={schemaClassSelectSx}
+                >
+                  {(SCHEMA_CLASS_OPTIONS[schema] || []).map((c) => (
+                    <MenuItem key={c} value={c} sx={{ fontSize: 13 }}>{c}</MenuItem>
+                  ))}
+                </TextField>
+              </span>
+            </Tooltip>
+          </>
+        );
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75, mb: 3 }}>
             {/* Line 1 */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                If one element has a class of
-              </Typography>
-              <TextField
-                select
-                size="small"
-                value={class1}
-                onChange={(e) => setClass1(e.target.value)}
-                SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                sx={{ width: 170, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
-              >
-                {CLASS_NAME_OPTIONS.map((c) => (
-                  <MenuItem key={c} value={c} sx={{ fontSize: 13 }}>{c}</MenuItem>
-                ))}
-              </TextField>
-
+              {renderSchemaClassRow('If one element has a schema of', schema1, setSchema1, class1, setClass1)}
               {!isDualCondition && (
                 <IconButton
                   size="small"
@@ -1192,21 +1352,7 @@ const SuppressionRulesDrawer = ({
             {/* Line 2 */}
             {isDualCondition && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
-                <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                  and the other has a class of
-                </Typography>
-                <TextField
-                  select
-                  size="small"
-                  value={class2}
-                  onChange={(e) => setClass2(e.target.value)}
-                  SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                  sx={{ width: 170, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
-                >
-                  {CLASS_NAME_OPTIONS.map((c) => (
-                    <MenuItem key={c} value={c} sx={{ fontSize: 13 }}>{c}</MenuItem>
-                  ))}
-                </TextField>
+                {renderSchemaClassRow('and the other has a schema of', schema2, setSchema2, class2, setClass2)}
                 <IconButton
                   size="small"
                   onClick={() => setIsDualCondition(false)}
@@ -1429,13 +1575,15 @@ const SuppressionRulesDrawer = ({
               {isBoth ? 'have a property of' : 'has a property of'}
             </Typography>
             <Pill>{rule.property1 || '@Design'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>with the value</Typography>
+            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>with a value</Typography>
+            <Pill>{rule.propertyOperator1 || 'equal to'}</Pill>
             <Pill>{rule.propertyVal1 || '36'}</Pill>
             {!isBoth && rule.isDualCondition && (
               <>
                 <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other has a property of</Typography>
                 <Pill>{rule.property2 || '@Window'}</Pill>
-                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>with the value</Typography>
+                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>with a value</Typography>
+                <Pill>{rule.propertyOperator2 || 'equal to'}</Pill>
                 <Pill>{rule.propertyVal2 || '42'}</Pill>
               </>
             )}
@@ -1446,12 +1594,16 @@ const SuppressionRulesDrawer = ({
       case 'Class': {
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>Suppress if one element has a class of</Typography>
-            <Pill>{rule.class1 || '@Design'}</Pill>
+            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>Suppress if one element has a schema of</Typography>
+            <Pill>{rule.schema1 || '—'}</Pill>
+            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and a class of</Typography>
+            <Pill>{rule.class1 || '—'}</Pill>
             {rule.isDualCondition && (
               <>
-                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other has a class of</Typography>
-                <Pill>{rule.class2 || '@Window'}</Pill>
+                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other has a schema of</Typography>
+                <Pill>{rule.schema2 || '—'}</Pill>
+                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and a class of</Typography>
+                <Pill>{rule.class2 || '—'}</Pill>
               </>
             )}
           </Box>
@@ -1518,22 +1670,11 @@ const SuppressionRulesDrawer = ({
     }
   };
 
-  // While a rule is being added/edited or there are unsaved add/edit/delete
-  // changes, the drawer can only be dismissed via "Undo changes" or "Save
-  // and apply changes" - clicking the backdrop, pressing Escape, or the X
-  // button are all blocked.
-  const hasPendingDrawerChanges = hasUnsavedChanges || isCreatingRule;
-
-  const handleDrawerClose = (...args) => {
-    if (hasPendingDrawerChanges) return;
-    onClose(...args);
-  };
-
   return (
     <Drawer
       anchor="right"
       open={open}
-      onClose={handleDrawerClose}
+      onClose={onClose}
       PaperProps={{
         sx: {
           width: '58vw',
@@ -1568,18 +1709,9 @@ const SuppressionRulesDrawer = ({
             <IconButton size="small" sx={{ color: '#657075' }}>
               <HelpOutlineIcon sx={{ fontSize: 20 }} />
             </IconButton>
-            <Tooltip title={hasPendingDrawerChanges ? 'Undo or save your changes first' : ''}>
-              <span>
-                <IconButton
-                  size="small"
-                  onClick={handleDrawerClose}
-                  disabled={hasPendingDrawerChanges}
-                  sx={{ color: '#657075' }}
-                >
-                  <CloseIcon sx={{ fontSize: 20 }} />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <IconButton size="small" onClick={onClose} sx={{ color: '#657075' }}>
+              <CloseIcon sx={{ fontSize: 20 }} />
+            </IconButton>
           </Box>
         </Box>
 
@@ -1623,7 +1755,7 @@ const SuppressionRulesDrawer = ({
               '&:hover': { backgroundColor: '#eef1f3', borderColor: '#c2c9cd' },
             }}
           >
-            Import rules
+            Import
           </Button>
           <input
             ref={deviceImportInputRef}
@@ -1710,7 +1842,33 @@ const SuppressionRulesDrawer = ({
               },
             }}
           >
-            Export rules
+            Export
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={selectedCardIds.length === 0}
+            onClick={() => setDeleteSelectedDialogOpen(true)}
+            sx={{
+              textTransform: 'none',
+              color: '#344046',
+              borderColor: '#e0e4e6',
+              backgroundColor: '#f5f7f8',
+              borderRadius: '4px',
+              fontSize: 13,
+              fontWeight: 500,
+              px: 1.5,
+              py: 0.6,
+              '&:hover': { backgroundColor: '#eef1f3', borderColor: '#c2c9cd' },
+              '&.Mui-disabled': {
+                color: '#9aa3a8',
+                borderColor: '#e0e4e6',
+                backgroundColor: '#f5f7f8',
+              },
+            }}
+          >
+            Delete
           </Button>
         </Box>
 
@@ -1998,6 +2156,41 @@ const SuppressionRulesDrawer = ({
         </Box>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              px: 0.5,
+              mb: -0.5,
+            }}
+          >
+            <Box
+              component="label"
+              sx={{ display: 'flex', alignItems: 'center', gap: 0.75, cursor: 'pointer', userSelect: 'none' }}
+            >
+              <Checkbox
+                size="small"
+                checked={allVisibleSelected}
+                indeterminate={someVisibleSelected}
+                onChange={handleToggleSelectAll}
+                inputProps={{ 'aria-label': 'Select all rules' }}
+                sx={{
+                  p: 0.25,
+                  color: '#657075',
+                  '&.Mui-checked, &.MuiCheckbox-indeterminate': { color: '#087f6c' },
+                }}
+              />
+              <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#1c1f21' }}>
+                Select all
+              </Typography>
+            </Box>
+            <Typography sx={{ fontSize: 12.5, color: '#657075' }}>
+              {visibleSelectedCount > 0
+                ? `${visibleSelectedCount} of ${filteredRules.length} selected`
+                : `${filteredRules.length} ${filteredRules.length === 1 ? 'rule' : 'rules'}`}
+            </Typography>
+          </Box>
           {filteredRules.map((rule, index) => {
             const isSelected = selectedCardIds.includes(rule.id);
             const ruleDescription =
@@ -2155,6 +2348,22 @@ const SuppressionRulesDrawer = ({
         </MenuItem>
 
         <MenuItem
+          onClick={handleDuplicateRule}
+          sx={{
+            fontSize: 13,
+            py: 0.85,
+            px: 1.5,
+            color: '#1c1f21',
+            '&:hover': { backgroundColor: '#f0f3f5' },
+          }}
+        >
+          <ListItemIcon sx={{ color: '#2c3437', minWidth: 28 }}>
+            <ContentCopyOutlinedIcon sx={{ fontSize: 18 }} />
+          </ListItemIcon>
+          Duplicate rule
+        </MenuItem>
+
+        <MenuItem
           onClick={handleDeleteRule}
           sx={{
             fontSize: 13,
@@ -2170,6 +2379,45 @@ const SuppressionRulesDrawer = ({
           Delete rule
         </MenuItem>
       </Menu>
+
+      {/* Delete selected rules confirmation dialog */}
+      <Dialog
+        open={deleteSelectedDialogOpen}
+        onClose={() => setDeleteSelectedDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, p: 1 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, fontSize: 18 }}>
+          {selectedCardIds.length > 1 ? `Delete ${selectedCardIds.length} rules?` : 'Delete this rule?'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Are you sure you want to delete {selectedCardIds.length > 1 ? 'the selected rules' : 'the selected rule'}?{' '}
+            {onUndoChanges
+              ? 'You can still restore them with "Undo changes" until you save and apply your changes.'
+              : 'This action cannot be undone.'}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => setDeleteSelectedDialogOpen(false)}
+            sx={{ textTransform: 'none', color: '#536066', borderColor: '#c6cdd0' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleDeleteSelectedRules}
+            sx={{ textTransform: 'none', backgroundColor: '#d0431a', '&:hover': { backgroundColor: '#b73814' } }}
+          >
+            {selectedCardIds.length > 1 ? 'Delete rules' : 'Delete rule'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Import suppression rules from test Dialog (matching screenshot exactly) */}
       <Dialog

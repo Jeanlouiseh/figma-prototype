@@ -1449,7 +1449,11 @@ const CreateClashTest = () => {
           }))
         )}
         onSaveRule={(newRule) => {
-          setSuppressionRules((prev) => [newRule, ...prev]);
+          setSuppressionRules((prev) =>
+            prev.some((r) => r.id === newRule.id)
+              ? prev.map((r) => (r.id === newRule.id ? { ...r, ...newRule } : r))
+              : [newRule, ...prev]
+          );
         }}
         onDeleteRule={(ruleId) => {
           setSuppressionRules((prev) => prev.filter((r) => r.id !== ruleId));
