@@ -319,6 +319,22 @@ const RUN_TRACKING_DEFAULTS = {
   viewedSinceRun: true,
 };
 
+export const hasTestResults = (test) =>
+  Boolean(test && test.lastRun !== 'Never' && (
+    test.runCount !== undefined ? test.runCount > 0 : Boolean(test.lastRun)
+  ));
+
+export const UNRUN_TEST_DEFAULTS = {
+  active: '0',
+  total: '0',
+  lastRun: 'Never',
+  lastRunDate: '',
+  runCount: 0,
+  prevActive: null,
+  prevTotal: null,
+  viewedSinceRun: true,
+};
+
 export const getStoredTests = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -348,19 +364,20 @@ export const getStoredTests = () => {
             updated = { ...updated, iModel: iModelName };
           }
 
-          if (!updated.suppressionRules || updated.suppressionRules.length === 0) {
-            if (iModelName === 'Liberty Bridge') {
-              updated = { ...updated, suppressionRules: LIBERTY_BRIDGE_DEFAULT_RULES };
-            } else if (iModelName === 'PPG Place') {
-              updated = { ...updated, suppressionRules: PPG_PLACE_DEFAULT_RULES };
-            } else {
-              updated = { ...updated, suppressionRules: ROBERTO_CLEMENTE_DEFAULT_RULES };
-            }
+          if (!updated.suppressionRules) {
+            updated = { ...updated, suppressionRules: [] };
             hasChanges = true;
           }
 
           if (updated.runCount === undefined) {
-            updated = { ...RUN_TRACKING_DEFAULTS, ...updated };
+            updated = {
+              ...RUN_TRACKING_DEFAULTS,
+              ...updated,
+              runCount: hasTestResults(updated) ? 1 : 0,
+            };
+            hasChanges = true;
+          } else if (updated.lastRun === 'Never' && updated.runCount !== 0) {
+            updated = { ...updated, runCount: 0 };
             hasChanges = true;
           }
           return updated;

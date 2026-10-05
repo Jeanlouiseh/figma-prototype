@@ -406,23 +406,9 @@ const CreateClashTest = () => {
 
   // Suppression rules drawer state
   const [suppressionDrawerOpen, setSuppressionDrawerOpen] = useState(false);
-  const [suppressionRules, setSuppressionRules] = useState([
-    {
-      id: 1,
-      name: 'Rule name',
-      description:
-        'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.',
-      suppressBasedOn: 'Property',
-      targetScope: 'one element',
-      property1: 'BBoxhigh',
-      propertyVal1: '34',
-      property2: 'BBoxlow',
-      propertyVal2: '42',
-      isDualCondition: true,
-      isImported: false,
-      importedFrom: '',
-    },
-  ]);
+  const [suppressionRules, setSuppressionRules] = useState(() =>
+    Array.isArray(testInfo.suppressionRules) ? testInfo.suppressionRules : []
+  );
 
   // Clearances and checks
   const [selfCheckA, setSelfCheckA] = useState(false);

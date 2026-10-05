@@ -13,8 +13,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Breadcrumbs,
-  Link,
   InputAdornment,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
@@ -51,7 +49,6 @@ const ProjectDashboard = () => {
     <Box className="dashboard-page" sx={{ p: 0 }}>
       <Box className="topbar">
         <ProjectHeader />
-        <Breadcrumbs separator="/" sx={{ fontSize: 12, ml: 1 }}><Link underline="always" color="text.primary" href="#">Link</Link><Link underline="always" color="text.primary" href="#">Link</Link></Breadcrumbs>
         <TextField size="small" placeholder="Search" sx={{ width: 120, ml: 'auto' }} InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon sx={{ fontSize: 16 }} /></InputAdornment> }} />
       </Box>
       <Box className="canvas-heading">

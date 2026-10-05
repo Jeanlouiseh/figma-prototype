@@ -88,9 +88,6 @@ import FormDetailPanel from '../components/FormDetailPanel';
 import {
   getStoredTests,
   updateTestInStore,
-  ROBERTO_CLEMENTE_DEFAULT_RULES,
-  LIBERTY_BRIDGE_DEFAULT_RULES,
-  PPG_PLACE_DEFAULT_RULES,
 } from '../data/clashTestsStore';
 
 const TEST_SETTINGS_TAG_USAGE = [
@@ -433,6 +430,13 @@ const CLASH_TABLE_COLUMNS = [
     ),
   },
   {
+    key: 'forms',
+    label: 'Forms',
+    width: '15%',
+    cellSx: { overflowWrap: 'anywhere' },
+    render: (clash, onOpenForm) => <ClashFormLinks clash={clash} onOpenForm={onOpenForm} />,
+  },
+  {
     key: 'tags',
     label: 'Tags',
     width: '6%',
@@ -449,6 +453,7 @@ const DEFAULT_VISIBLE_COLUMN_KEYS = [
   'modelA',
   'modelB',
   'categoryA',
+  'forms',
   'tags',
 ];
 
@@ -664,6 +669,26 @@ const getClashForms = (clash) => {
 
   return [];
 };
+
+const ClashFormLinks = ({ clash, onOpenForm }) => (
+  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+    {getClashForms(clash).map((form) => (
+      <Link
+        key={form.id}
+        component="button"
+        type="button"
+        underline="always"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenForm(form.id);
+        }}
+        sx={{ fontSize: 12.5, color: '#087f6c', textAlign: 'left', overflowWrap: 'anywhere' }}
+      >
+        {form.subject || 'Untitled form'}
+      </Link>
+    ))}
+  </Box>
+);
 
 const getClusterGroups = (clashesList, clusterType) => {
   if (!clusterType) return null;
@@ -1022,6 +1047,8 @@ const ClashTestDetail = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTagFilters, setSelectedTagFilters] = useState([]);
   const [tagFilterAnchorEl, setTagFilterAnchorEl] = useState(null);
+  const [selectedStatusFilters, setSelectedStatusFilters] = useState([]);
+  const [statusFilterAnchorEl, setStatusFilterAnchorEl] = useState(null);
 
   // Clustering state (matching default.png and clusters.png)
   const [clusterBy, setClusterBy] = useState(null);
@@ -1115,22 +1142,15 @@ const ClashTestDetail = () => {
 
   // Suppression rules state (matching rules applied while test was built)
   const initialRules = useMemo(() => {
-    if (testData.suppressionRules && Array.isArray(testData.suppressionRules) && testData.suppressionRules.length > 0) {
+    if (Array.isArray(testData.suppressionRules)) {
       return testData.suppressionRules;
     }
     const stored = getStoredTests();
     const found = stored.find((t) => t.id === testData.id || t.name === testData.name);
-    if (found && found.suppressionRules && Array.isArray(found.suppressionRules) && found.suppressionRules.length > 0) {
+    if (found && Array.isArray(found.suppressionRules)) {
       return found.suppressionRules;
     }
-    const model = (testData.iModel || '').toLowerCase();
-    if (model.includes('liberty')) {
-      return LIBERTY_BRIDGE_DEFAULT_RULES;
-    }
-    if (model.includes('ppg') || model.includes('tied')) {
-      return PPG_PLACE_DEFAULT_RULES;
-    }
-    return ROBERTO_CLEMENTE_DEFAULT_RULES;
+    return [];
   }, [testData]);
 
   const [suppressionRules, setSuppressionRules] = useState(initialRules);
@@ -1502,10 +1522,22 @@ const ClashTestDetail = () => {
         : [...current, tagName]
     );
   };
-  const hasActiveTableFilters = selectedTagFilters.length > 0;
+  const handleToggleStatusFilter = (status) => {
+    setSelectedStatusFilters((current) =>
+      current.includes(status)
+        ? current.filter((selectedStatus) => selectedStatus !== status)
+        : [...current, status]
+    );
+  };
+  const hasActiveTableFilters = selectedTagFilters.length > 0 || selectedStatusFilters.length > 0;
+  const handleCloseFilterMenu = () => {
+    setTagFilterAnchorEl(null);
+    setStatusFilterAnchorEl(null);
+  };
   const handleClearAllFilters = () => {
     setSelectedTagFilters([]);
-    setTagFilterAnchorEl(null);
+    setSelectedStatusFilters([]);
+    handleCloseFilterMenu();
   };
 
   // Live count of how many clashes each tag is actually applied to
@@ -1591,7 +1623,7 @@ const ClashTestDetail = () => {
     ? getClashForms(selectedFormClashes[0]).find((form) => form.id === selectedFormId)
     : null;
   const selectedFormElements = useMemo(
-    () => [...new Set(selectedFormClashes.flatMap((clash) => [clash.elementA, clash.elementB]).filter(Boolean))],
+    () => selectedFormClashes.map((clash) => clash.id),
     [selectedFormClashes]
   );
   const selectedFormLocation = useMemo(
@@ -2292,7 +2324,12 @@ const ClashTestDetail = () => {
         c.elementB.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.status.toLowerCase().includes(searchQuery.toLowerCase())
     )
-    .filter((c) => selectedTagFilters.every((tagName) => (c.tags || []).includes(tagName)));
+    .filter((c) => selectedTagFilters.every((tagName) => (c.tags || []).includes(tagName)))
+    .filter(
+      (c) =>
+        selectedStatusFilters.length === 0 ||
+        selectedStatusFilters.includes(c.status ? 'Suppressed' : 'Unsuppressed')
+    );
 
   const clusterGroups = useMemo(() => {
     return getClusterGroups(filteredClashes, clusterBy);
@@ -3354,6 +3391,16 @@ const ClashTestDetail = () => {
                             borderBottom: '1px solid #eaedf0',
                             py: 0.85,
                           },
+                          '& .MuiTableCell-paddingCheckbox': {
+                            position: 'sticky',
+                            left: 0,
+                            zIndex: 1,
+                            backgroundColor: 'inherit',
+                          },
+                          '& thead .MuiTableCell-paddingCheckbox': {
+                            zIndex: 3,
+                            backgroundColor: '#fff',
+                          },
                         }}
                       >
                         <TableHead>
@@ -3384,6 +3431,7 @@ const ClashTestDetail = () => {
                             <FilterableTableHeader>Element B</FilterableTableHeader>
                             <FilterableTableHeader>Status</FilterableTableHeader>
                             <FilterableTableHeader>Model A</FilterableTableHeader>
+                            <FilterableTableHeader>Forms</FilterableTableHeader>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -3401,7 +3449,7 @@ const ClashTestDetail = () => {
                                     ? '#d8e8e3'
                                     : isSelected
                                     ? '#f2f8f6'
-                                    : 'transparent',
+                                    : '#fff',
                                   '&:hover': {
                                     backgroundColor: isChecked
                                       ? '#cfe2dc'
@@ -3443,6 +3491,9 @@ const ClashTestDetail = () => {
                                   <Typography noWrap sx={{ fontSize: 12.5, color: '#536066' }}>
                                     {clash.modelA}
                                   </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <ClashFormLinks clash={clash} onOpenForm={setSelectedFormId} />
                                 </TableCell>
                               </TableRow>
                             );
@@ -3508,6 +3559,20 @@ const ClashTestDetail = () => {
                       overflow: 'hidden',
                       py: 0.85,
                     },
+                    '& .MuiTableCell-paddingCheckbox': {
+                      width: 48,
+                      minWidth: 48,
+                      px: 1,
+                      overflow: 'visible',
+                      position: 'sticky',
+                      left: 0,
+                      zIndex: 1,
+                      backgroundColor: 'inherit',
+                    },
+                    '& thead .MuiTableCell-paddingCheckbox': {
+                      zIndex: 3,
+                      backgroundColor: '#fff',
+                    },
                   }}
                 >
                   <TableHead>
@@ -3525,15 +3590,29 @@ const ClashTestDetail = () => {
                           key={column.key}
                           sx={{ width: column.width }}
                           onFilterClick={
-                            column.key === 'tags'
+                            column.key === 'tags' || column.key === 'status'
                               ? (event) => {
                                   event.stopPropagation();
-                                  setTagFilterAnchorEl(event.currentTarget);
+                                  handleCloseFilterMenu();
+                                  if (column.key === 'tags') {
+                                    setTagFilterAnchorEl(event.currentTarget);
+                                  } else {
+                                    setStatusFilterAnchorEl(event.currentTarget);
+                                  }
                                 }
                               : undefined
                           }
-                          filterActive={column.key === 'tags' && selectedTagFilters.length > 0}
-                          filterLabel={column.key === 'tags' ? 'Filter by tags' : undefined}
+                          filterActive={
+                            (column.key === 'tags' && selectedTagFilters.length > 0) ||
+                            (column.key === 'status' && selectedStatusFilters.length > 0)
+                          }
+                          filterLabel={
+                            column.key === 'tags'
+                              ? 'Filter by tags'
+                              : column.key === 'status'
+                              ? 'Filter by status'
+                              : undefined
+                          }
                         >
                           {column.label}
                         </FilterableTableHeader>
@@ -3572,7 +3651,7 @@ const ClashTestDetail = () => {
                           onClick={() => handleRowClick(clash.id)}
                           sx={{
                             cursor: 'pointer',
-                            backgroundColor: isChecked ? '#d8e8e3' : isSelected ? '#f2f8f6' : 'transparent',
+                            backgroundColor: isChecked ? '#d8e8e3' : isSelected ? '#f2f8f6' : '#fff',
                             '&:hover': { backgroundColor: isChecked ? '#cfe2dc' : isSelected ? '#e8f3ef' : '#f8fafb' },
                           }}
                         >
@@ -3589,7 +3668,7 @@ const ClashTestDetail = () => {
                               key={column.key}
                               sx={typeof column.cellSx === 'function' ? column.cellSx(clash) : column.cellSx}
                             >
-                              {column.render(clash)}
+                              {column.render(clash, setSelectedFormId)}
                             </TableCell>
                           ))}
                           <TableCell
@@ -3608,9 +3687,9 @@ const ClashTestDetail = () => {
               </TableContainer>
 
               <Menu
-                anchorEl={tagFilterAnchorEl}
-                open={Boolean(tagFilterAnchorEl)}
-                onClose={() => setTagFilterAnchorEl(null)}
+                anchorEl={statusFilterAnchorEl || tagFilterAnchorEl}
+                open={Boolean(statusFilterAnchorEl || tagFilterAnchorEl)}
+                onClose={handleCloseFilterMenu}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
                 transformOrigin={{ vertical: 'top', horizontal: 'left' }}
                 PaperProps={{
@@ -3626,23 +3705,29 @@ const ClashTestDetail = () => {
               >
                 <Box sx={{ px: 1.5, py: 0.75 }}>
                   <Typography sx={{ fontSize: 12, fontWeight: 600, color: '#657075' }}>
-                    Filter by tags
+                    {statusFilterAnchorEl ? 'Filter by status' : 'Filter by tags'}
                   </Typography>
                   <Typography sx={{ fontSize: 11.5, color: '#8a9296' }}>
-                    Matches all selected tags
+                    {statusFilterAnchorEl ? 'Matches any selected status' : 'Matches all selected tags'}
                   </Typography>
                 </Box>
                 <Divider sx={{ borderColor: '#eaedf0' }} />
-                {projectTagOptions.map((tagName) => (
+                {(statusFilterAnchorEl ? ['Unsuppressed', 'Suppressed'] : projectTagOptions).map((option) => (
                   <MenuItem
-                    key={tagName}
+                    key={option}
                     dense
-                    onClick={() => handleToggleTagFilter(tagName)}
+                    onClick={() =>
+                      statusFilterAnchorEl
+                        ? handleToggleStatusFilter(option)
+                        : handleToggleTagFilter(option)
+                    }
                     sx={{ py: 0.25, px: 1 }}
                   >
                     <Checkbox
                       size="small"
-                      checked={selectedTagFilters.includes(tagName)}
+                      checked={
+                        (statusFilterAnchorEl ? selectedStatusFilters : selectedTagFilters).includes(option)
+                      }
                       sx={{
                         p: 0.5,
                         mr: 0.75,
@@ -3650,10 +3735,10 @@ const ClashTestDetail = () => {
                         '&.Mui-checked': { color: '#087f6c' },
                       }}
                     />
-                    <Typography sx={{ fontSize: 13, color: '#1c1f21' }}>{tagName}</Typography>
+                    <Typography sx={{ fontSize: 13, color: '#1c1f21' }}>{option}</Typography>
                   </MenuItem>
                 ))}
-                {selectedTagFilters.length > 0 && (
+                {hasActiveTableFilters && (
                   <>
                     <Divider sx={{ borderColor: '#eaedf0' }} />
                     <MenuItem
@@ -4490,7 +4575,7 @@ const ClashTestDetail = () => {
       >
         {/* Search input inside popover */}
         <TextField
-          placeholder="Find tags"
+          placeholder="Find and add tags"
           size="small"
           fullWidth
           value={tagFilterQuery}

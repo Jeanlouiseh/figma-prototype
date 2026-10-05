@@ -50,7 +50,7 @@ import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined';
 import { ClashIcon } from '../components/Sidebar';
 import ProjectHeader from '../components/ProjectHeader';
 import SuppressionRulesDrawer from '../components/SuppressionRulesDrawer';
-import { getStoredTests, saveStoredTests } from '../data/clashTestsStore';
+import { getStoredTests, saveStoredTests, hasTestResults, UNRUN_TEST_DEFAULTS } from '../data/clashTestsStore';
 
 // Toolbar action icons matching the design specification: Import, Export, Download
 const ImportActionIcon = (props) => (
@@ -247,7 +247,7 @@ const ClashDetection = () => {
               active: String(activeVal),
               total: String(totalVal),
               lastRun: 'Just now',
-              runCount: (t.runCount || 1) + 1,
+              runCount: (t.runCount ?? 0) + 1,
               prevActive: t.active,
               prevTotal: t.total,
               viewedSinceRun: false,
@@ -265,8 +265,10 @@ const ClashDetection = () => {
   useEffect(() => {
     if (location.state?.newTest) {
       setTests((prev) => {
-        if (prev.some((t) => t.id === location.state.newTest.id)) return prev;
-        const next = [location.state.newTest, ...prev];
+        const newTest = location.state.newTest;
+        const next = prev.some((t) => t.id === newTest.id)
+          ? prev.map((t) => t.id === newTest.id ? { ...t, ...newTest } : t)
+          : [newTest, ...prev];
         saveStoredTests(next);
         return next;
       });
@@ -324,7 +326,7 @@ const ClashDetection = () => {
       ...test,
       id: Date.now(),
       name: `${test.name} (Copy)`,
-      lastRun: 'Just now',
+      ...UNRUN_TEST_DEFAULTS,
     };
     const updated = [newTest, ...tests];
     setTests(updated);
@@ -366,12 +368,10 @@ const ClashDetection = () => {
         name: editFormData.name.trim(),
         description: editFormData.description ? editFormData.description.trim() : '',
         iModel: editFormData.iModel || 'Roberto Clemente Bridge',
-        active: '0',
-        total: '0',
-        lastRun: 'Never',
+        ...UNRUN_TEST_DEFAULTS,
         tag: editFormData.tag || 'WP03',
         createdBy: 'Jeanlouise Hornberger',
-        lastRunDate: '02 April 2026',
+        suppressionRules: [],
       };
       const updated = [created, ...tests];
       setTests(updated);
@@ -411,6 +411,9 @@ const ClashDetection = () => {
   };
 
   const handleRowClick = (test) => {
+    if (!hasTestResults(test)) {
+      return;
+    }
     if (!test.viewedSinceRun) {
       setTests((prevTests) => {
         const updatedTests = prevTests.map((t) =>
