@@ -65,17 +65,18 @@ const SUPPRESS_BASED_OPTIONS = [
 
 const TARGET_OPTIONS = ['one element', 'both elements'];
 const NAME_MATCH_OPTIONS = ['is exactly', 'matches'];
+const IMODEL_OPTIONS = ['Roberto Clemente Bridge', 'Liberty Bridge', 'PPG Place'];
 
 const MODEL_NAME_OPTIONS = [
-  'Ref-11, I-95_CL_Corridor_Pavt.dgn, Default-3D',
-  'Ref-11, I-95_Geometry',
-  'Ref, DrainageRegion01',
-  'Pipes',
-  'Walls',
-  'Bolts',
-  'Windows',
-  'Doors',
-  'Columns',
+  'Arch Ribs',
+  'Vertical Hanger Cables',
+  'Steel Floorbeams & Stringers',
+  'Orthotropic Deck Plate',
+  'River Pier Pedestals',
+  'Bearing Assemblies',
+  'Storm Drainage Piping',
+  'Deck Lighting Conduit',
+  'Sidewalk Rails',
 ];
 
 const PROPERTY_OPERATOR_OPTIONS = ['equal to', 'not equal to', 'like'];
@@ -179,8 +180,8 @@ const MOCK_TEST_RULES = {
       description: 'Suppress low-voltage tray collisions with light framing fixtures.',
       suppressBasedOn: 'Model',
       targetScope: 'one element',
-      attribute1: 'Pipes',
-      attribute2: 'Walls',
+      attribute1: 'Storm Drainage Piping',
+      attribute2: 'Steel Floorbeams & Stringers',
       isDualCondition: true,
     },
     {
@@ -335,28 +336,6 @@ WHERE
   -- And ensure we are looking at two different elements
   AND SourceECInstanceId != TargetECInstanceId`;
 
-// Pill tag style matching the dark badges in screenshot
-const Pill = ({ children, color = '#263238' }) => (
-  <Box
-    component="span"
-    sx={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      px: 1.25,
-      py: 0.35,
-      borderRadius: '16px',
-      backgroundColor: color,
-      color: '#fff',
-      fontSize: 12,
-      fontWeight: 500,
-      mx: 0.5,
-      verticalAlign: 'middle',
-    }}
-  >
-    {children}
-  </Box>
-);
-
 const SuppressionRulesDrawer = ({
   open,
   onClose,
@@ -398,13 +377,15 @@ const SuppressionRulesDrawer = ({
 
   // Common rule fields
   const [ruleName, setRuleName] = useState('');
+  const [ruleNameError, setRuleNameError] = useState(false);
   const [description, setDescription] = useState('');
+  const [selectedIModel, setSelectedIModel] = useState(IMODEL_OPTIONS[0]);
   const [suppressBasedOn, setSuppressBasedOn] = useState('Model');
 
   // Condition fields for Model & Category
   const [targetScope, setTargetScope] = useState('one element');
-  const [attribute1, setAttribute1] = useState('Pipes');
-  const [attribute2, setAttribute2] = useState('Walls');
+  const [attribute1, setAttribute1] = useState(MODEL_NAME_OPTIONS[0]);
+  const [attribute2, setAttribute2] = useState(MODEL_NAME_OPTIONS[1]);
   const [nameMatchOperator1, setNameMatchOperator1] = useState('is exactly');
   const [nameMatchOperator2, setNameMatchOperator2] = useState('matches');
   const [isDualCondition, setIsDualCondition] = useState(true);
@@ -468,11 +449,13 @@ const SuppressionRulesDrawer = ({
     if (initialCreateRule && open) {
       setEditingRuleId(initialCreateRule.id || null);
       setRuleName(initialCreateRule.name || '');
+      setRuleNameError(false);
       setDescription(initialCreateRule.description || '');
+      setSelectedIModel(initialCreateRule.iModel || IMODEL_OPTIONS[0]);
       setSuppressBasedOn(initialCreateRule.suppressBasedOn || 'Model');
       setTargetScope(initialCreateRule.targetScope || 'one element');
-      setAttribute1(initialCreateRule.attribute1 || 'Ref-11, I-95_CL_Corridor_Pavt.dgn, Default-3D');
-      setAttribute2(initialCreateRule.attribute2 || 'Walls');
+      setAttribute1(initialCreateRule.attribute1 || MODEL_NAME_OPTIONS[0]);
+      setAttribute2(initialCreateRule.attribute2 || MODEL_NAME_OPTIONS[1]);
       setNameMatchOperator1(initialCreateRule.nameMatchOperator1 || 'is exactly');
       setNameMatchOperator2(initialCreateRule.nameMatchOperator2 || 'matches');
       setIsDualCondition(Boolean(initialCreateRule.isDualCondition));
@@ -503,14 +486,14 @@ const SuppressionRulesDrawer = ({
 
   const handleOpenCreateForm = () => {
     setEditingRuleId(null);
-    setRuleName('Rule name');
-    setDescription(
-      'It is a long established fact that a reader will be distracted by the readable content of a page when looking at its layout.'
-    );
+    setRuleName('');
+    setRuleNameError(false);
+    setDescription('');
+    setSelectedIModel(IMODEL_OPTIONS[0]);
     setSuppressBasedOn('Category');
     setTargetScope('one element');
     setAttribute1(MODEL_NAME_OPTIONS[0]);
-    setAttribute2(MODEL_NAME_OPTIONS[1] || MODEL_NAME_OPTIONS[0]);
+    setAttribute2('Sidewalk Rails');
     setNameMatchOperator1('is exactly');
     setNameMatchOperator2('matches');
     setIsDualCondition(true);
@@ -551,10 +534,15 @@ const SuppressionRulesDrawer = ({
   };
 
   const handleSave = () => {
+    if (!ruleName.trim()) {
+      setRuleNameError(true);
+      return;
+    }
     const newRule = {
       id: editingRuleId || Date.now(),
       name: ruleName.trim() || 'Rule name',
       description: description.trim(),
+      ...(libraryMode ? { iModel: selectedIModel } : {}),
       suppressBasedOn,
       targetScope,
       attribute1,
@@ -602,6 +590,10 @@ const SuppressionRulesDrawer = ({
   // clashes. If a rule is mid-edit, save it first so the preview reflects it.
   const handlePreviewResultsClick = () => {
     if (isCreatingRule) {
+      if (!ruleName.trim()) {
+        setRuleNameError(true);
+        return;
+      }
       handleSave();
     }
     if (onPreviewResults) onPreviewResults();
@@ -611,6 +603,10 @@ const SuppressionRulesDrawer = ({
   // mid-edit, save it first so it's included.
   const handleSaveAndApplyClick = () => {
     if (isCreatingRule) {
+      if (!ruleName.trim()) {
+        setRuleNameError(true);
+        return;
+      }
       handleSave();
     }
     setHasUnsavedChanges(false);
@@ -756,11 +752,13 @@ const SuppressionRulesDrawer = ({
     if (!menuRule) return;
     setEditingRuleId(menuRule.id);
     setRuleName(menuRule.name || '');
+    setRuleNameError(false);
     setDescription(menuRule.description || '');
+    setSelectedIModel(menuRule.iModel || IMODEL_OPTIONS[0]);
     setSuppressBasedOn(menuRule.suppressBasedOn || 'Model');
     setTargetScope(menuRule.targetScope || 'one element');
-    setAttribute1(menuRule.attribute1 || 'Pipes');
-    setAttribute2(menuRule.attribute2 || 'Walls');
+    setAttribute1(menuRule.attribute1 || MODEL_NAME_OPTIONS[0]);
+    setAttribute2(menuRule.attribute2 || MODEL_NAME_OPTIONS[1]);
     setNameMatchOperator1(menuRule.nameMatchOperator1 || 'is exactly');
     setNameMatchOperator2(menuRule.nameMatchOperator2 || 'matches');
     setIsDualCondition(menuRule.isDualCondition !== false);
@@ -791,9 +789,9 @@ const SuppressionRulesDrawer = ({
 
     let conditionSummary = '';
     if (menuRule.suppressBasedOn === 'Model') {
-      conditionSummary = `Model name ${menuRule.nameMatchOperator1 || 'is exactly'} ${menuRule.attribute1 || 'Pipes'}`;
+      conditionSummary = `Model name ${menuRule.nameMatchOperator1 || 'is exactly'} ${menuRule.attribute1 || MODEL_NAME_OPTIONS[0]}`;
     } else if (menuRule.suppressBasedOn === 'Category') {
-      conditionSummary = `Category name ${menuRule.nameMatchOperator1 || 'is exactly'} ${menuRule.attribute1 || 'Pipes'}`;
+      conditionSummary = `Category name ${menuRule.nameMatchOperator1 || 'is exactly'} ${menuRule.attribute1 || MODEL_NAME_OPTIONS[0]}`;
     } else if (menuRule.suppressBasedOn === 'Property') {
       conditionSummary = `Property: ${menuRule.property1 || '@Design'} ${menuRule.propertyOperator1 || 'equal to'} ${menuRule.propertyVal1 || '36'}`;
       if (menuRule.isDualCondition && menuRule.targetScope !== 'both elements') {
@@ -865,35 +863,32 @@ const SuppressionRulesDrawer = ({
     handleCardMenuClose();
   };
 
-  // Render the sentence builder form dynamically matching each column in the matrix screenshot
   const renderSentenceBuilder = () => {
-    const compactSelectSx = {
-      '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 },
+    const standardSelectSx = {
+      '& .MuiInput-underline:before': { borderColor: '#8a9499' },
+      '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderColor: '#1c1f21' },
+      '& .MuiInput-underline:after': { borderColor: '#087f6c' },
       '& .MuiSelect-select': {
+        fontSize: 13.5,
+        color: '#1c1f21',
+        py: 0.6,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
-        pr: '28px !important',
+        pr: '24px !important',
+      },
+      '& input': {
+        fontSize: 13.5,
+        color: '#1c1f21',
+        py: 0.6,
       },
     };
-    const targetScopeSelectSx = { width: 125, ...compactSelectSx };
-    const nameMatchSelectSx = { width: 112, ...compactSelectSx };
-    const attributeSelectSx = { width: 128, ...compactSelectSx };
-    const fullWidthAttributeSelectSx = { width: '100%', ...compactSelectSx };
-    const highlightedAttributeSelectSx = {
-      ...attributeSelectSx,
-      '& .MuiOutlinedInput-root': {
-        ...attributeSelectSx['& .MuiOutlinedInput-root'],
-        '& fieldset': { borderColor: '#087f6c' },
-      },
-    };
-    const highlightedFullWidthAttributeSelectSx = {
-      ...fullWidthAttributeSelectSx,
-      '& .MuiOutlinedInput-root': {
-        ...fullWidthAttributeSelectSx['& .MuiOutlinedInput-root'],
-        '& fieldset': { borderColor: '#087f6c' },
-      },
-    };
+    const targetScopeSelectSx = { width: 150, ...standardSelectSx };
+    const nameMatchSelectSx = { width: 120, ...standardSelectSx };
+    const attributeSelectSx = { width: 160, ...standardSelectSx };
+    const fullWidthAttributeSelectSx = { width: '100%', ...standardSelectSx };
+    const highlightedAttributeSelectSx = attributeSelectSx;
+    const highlightedFullWidthAttributeSelectSx = fullWidthAttributeSelectSx;
     const wildcardHelperNote = (
       <Typography sx={{ fontSize: 12, color: '#657075', lineHeight: 1.35, whiteSpace: 'normal' }}>
         Use '_' for one character; '%' for multiple.
@@ -909,7 +904,7 @@ const SuppressionRulesDrawer = ({
     });
     const helperNoteSx = {
       position: 'absolute',
-      top: 40,
+      top: 36,
       left: 0,
       right: 0,
     };
@@ -920,10 +915,11 @@ const SuppressionRulesDrawer = ({
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75, mb: 3 }}>
             {/* Line 1 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap', pb: nameMatchOperator1 === 'matches' ? 3.5 : 0 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#1c1f21' }}>If</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', pb: nameMatchOperator1 === 'matches' ? 3.5 : 0 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1c1f21' }}>If</Typography>
               <TextField
                 select
+                variant="standard"
                 size="small"
                 value={targetScope}
                 onChange={(e) => setTargetScope(e.target.value)}
@@ -936,9 +932,18 @@ const SuppressionRulesDrawer = ({
               </TextField>
 
               {isBoth ? (
-                <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                  are in the same model
-                </Typography>
+                <TextField
+                  select
+                  variant="standard"
+                  size="small"
+                  value="are in the same model"
+                  SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
+                  sx={{ width: 220, ...standardSelectSx }}
+                >
+                  <MenuItem value="are in the same model" sx={{ fontSize: 13 }}>
+                    are in the same model
+                  </MenuItem>
+                </TextField>
               ) : (
                 <>
                   <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
@@ -946,6 +951,7 @@ const SuppressionRulesDrawer = ({
                   </Typography>
                   <TextField
                     select
+                    variant="standard"
                     size="small"
                     value={nameMatchOperator1}
                     onChange={(e) => setNameMatchOperator1(e.target.value)}
@@ -959,6 +965,7 @@ const SuppressionRulesDrawer = ({
                   <Box sx={getAttributeWrapperSx(nameMatchOperator1)}>
                     <TextField
                       select
+                      variant="standard"
                       size="small"
                       value={attribute1}
                       onChange={(e) => setAttribute1(e.target.value)}
@@ -974,13 +981,27 @@ const SuppressionRulesDrawer = ({
                     )}
                   </Box>
                   {!isDualCondition && (
-                    <IconButton
+                    <Button
                       size="small"
+                      variant="outlined"
+                      startIcon={<AddIcon sx={{ fontSize: 16 }} />}
                       onClick={() => setIsDualCondition(true)}
-                      sx={{ border: '1px solid #c2c9cd', borderRadius: '4px', p: 0.6, color: '#657075' }}
+                      sx={{
+                        textTransform: 'none',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: '#4a555b',
+                        borderColor: '#c2c9cd',
+                        borderRadius: '4px',
+                        py: 0.4,
+                        px: 1.25,
+                        height: 32,
+                        whiteSpace: 'nowrap',
+                        '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
+                      }}
                     >
-                      <AddIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
+                      Add a condition
+                    </Button>
                   )}
                 </>
               )}
@@ -994,6 +1015,7 @@ const SuppressionRulesDrawer = ({
                 </Typography>
                 <TextField
                   select
+                  variant="standard"
                   size="small"
                   value={nameMatchOperator2}
                   onChange={(e) => setNameMatchOperator2(e.target.value)}
@@ -1007,6 +1029,7 @@ const SuppressionRulesDrawer = ({
                 <Box sx={getAttributeWrapperSx(nameMatchOperator2)}>
                   <TextField
                     select
+                    variant="standard"
                     size="small"
                     value={attribute2}
                     onChange={(e) => setAttribute2(e.target.value)}
@@ -1021,13 +1044,27 @@ const SuppressionRulesDrawer = ({
                     <Box sx={helperNoteSx}>{wildcardHelperNote}</Box>
                   )}
                 </Box>
-                <IconButton
+                <Button
                   size="small"
+                  variant="outlined"
+                  startIcon={<RemoveIcon sx={{ fontSize: 16 }} />}
                   onClick={() => setIsDualCondition(false)}
-                  sx={{ border: '1px solid #c2c9cd', borderRadius: '4px', p: 0.6, color: '#657075' }}
+                  sx={{
+                    textTransform: 'none',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: '#4a555b',
+                    borderColor: '#c2c9cd',
+                    borderRadius: '4px',
+                    py: 0.4,
+                    px: 1.25,
+                    height: 32,
+                    whiteSpace: 'nowrap',
+                    '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
+                  }}
                 >
-                  <RemoveIcon sx={{ fontSize: 16 }} />
-                </IconButton>
+                  Remove condition
+                </Button>
               </Box>
             )}
           </Box>
@@ -1039,10 +1076,11 @@ const SuppressionRulesDrawer = ({
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75, mb: 3 }}>
             {/* Line 1 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap', mt: nameMatchOperator1 === 'matches' ? 2 : 0 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#1c1f21' }}>If</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mt: nameMatchOperator1 === 'matches' ? 2 : 0 }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1c1f21' }}>If</Typography>
               <TextField
                 select
+                variant="standard"
                 size="small"
                 value={targetScope}
                 onChange={(e) => setTargetScope(e.target.value)}
@@ -1055,9 +1093,18 @@ const SuppressionRulesDrawer = ({
               </TextField>
 
               {isBoth ? (
-                <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
-                  are in the same category
-                </Typography>
+                <TextField
+                  select
+                  variant="standard"
+                  size="small"
+                  value="are in the same category"
+                  SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
+                  sx={{ width: 220, ...standardSelectSx }}
+                >
+                  <MenuItem value="are in the same category" sx={{ fontSize: 13 }}>
+                    are in the same category
+                  </MenuItem>
+                </TextField>
               ) : (
                 <>
                   <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
@@ -1065,6 +1112,7 @@ const SuppressionRulesDrawer = ({
                   </Typography>
                   <TextField
                     select
+                    variant="standard"
                     size="small"
                     value={nameMatchOperator1}
                     onChange={(e) => setNameMatchOperator1(e.target.value)}
@@ -1078,6 +1126,7 @@ const SuppressionRulesDrawer = ({
                   <Box sx={getAttributeWrapperSx(nameMatchOperator1)}>
                     <TextField
                       select
+                      variant="standard"
                       size="small"
                       value={attribute1}
                       onChange={(e) => setAttribute1(e.target.value)}
@@ -1093,13 +1142,27 @@ const SuppressionRulesDrawer = ({
                     )}
                   </Box>
                   {!isDualCondition && (
-                    <IconButton
+                    <Button
                       size="small"
+                      variant="outlined"
+                      startIcon={<AddIcon sx={{ fontSize: 16 }} />}
                       onClick={() => setIsDualCondition(true)}
-                      sx={{ border: '1px solid #c2c9cd', borderRadius: '4px', p: 0.6, color: '#657075' }}
+                      sx={{
+                        textTransform: 'none',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: '#4a555b',
+                        borderColor: '#c2c9cd',
+                        borderRadius: '4px',
+                        py: 0.4,
+                        px: 1.25,
+                        height: 32,
+                        whiteSpace: 'nowrap',
+                        '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
+                      }}
                     >
-                      <AddIcon sx={{ fontSize: 16 }} />
-                    </IconButton>
+                      Add a condition
+                    </Button>
                   )}
                 </>
               )}
@@ -1113,6 +1176,7 @@ const SuppressionRulesDrawer = ({
                 </Typography>
                 <TextField
                   select
+                  variant="standard"
                   size="small"
                   value={nameMatchOperator2}
                   onChange={(e) => setNameMatchOperator2(e.target.value)}
@@ -1126,6 +1190,7 @@ const SuppressionRulesDrawer = ({
                 <Box sx={getAttributeWrapperSx(nameMatchOperator2)}>
                   <TextField
                     select
+                    variant="standard"
                     size="small"
                     value={attribute2}
                     onChange={(e) => setAttribute2(e.target.value)}
@@ -1140,13 +1205,27 @@ const SuppressionRulesDrawer = ({
                     <Box sx={helperNoteSx}>{wildcardHelperNote}</Box>
                   )}
                 </Box>
-                <IconButton
+                <Button
                   size="small"
+                  variant="outlined"
+                  startIcon={<RemoveIcon sx={{ fontSize: 16 }} />}
                   onClick={() => setIsDualCondition(false)}
-                  sx={{ border: '1px solid #c2c9cd', borderRadius: '4px', p: 0.6, color: '#657075' }}
+                  sx={{
+                    textTransform: 'none',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: '#4a555b',
+                    borderColor: '#c2c9cd',
+                    borderRadius: '4px',
+                    py: 0.4,
+                    px: 1.25,
+                    height: 32,
+                    whiteSpace: 'nowrap',
+                    '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
+                  }}
                 >
-                  <RemoveIcon sx={{ fontSize: 16 }} />
-                </IconButton>
+                  Remove condition
+                </Button>
               </Box>
             )}
           </Box>
@@ -1158,11 +1237,12 @@ const SuppressionRulesDrawer = ({
         const renderPropertyOperatorSelect = (value, setValue) => (
           <TextField
             select
+            variant="standard"
             size="small"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-            sx={{ width: 135, ...compactSelectSx }}
+            sx={{ width: 135, ...standardSelectSx }}
           >
             {PROPERTY_OPERATOR_OPTIONS.map((op) => (
               <MenuItem key={op} value={op} sx={{ fontSize: 13 }}>{op}</MenuItem>
@@ -1172,15 +1252,16 @@ const SuppressionRulesDrawer = ({
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75, mb: 3 }}>
             {/* Line 1 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#1c1f21' }}>If</Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+              <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1c1f21' }}>If</Typography>
               <TextField
                 select
+                variant="standard"
                 size="small"
                 value={targetScope}
                 onChange={(e) => setTargetScope(e.target.value)}
                 SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                sx={{ width: 160, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+                sx={targetScopeSelectSx}
               >
                 {TARGET_OPTIONS.map((t) => (
                   <MenuItem key={t} value={t} sx={{ fontSize: 13 }}>{t}</MenuItem>
@@ -1193,18 +1274,17 @@ const SuppressionRulesDrawer = ({
 
               <TextField
                 select
+                variant="standard"
                 size="small"
                 value={property1}
                 onChange={(e) => setProperty1(e.target.value)}
                 SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                sx={{ width: 150, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+                sx={{ width: 140, ...standardSelectSx }}
               >
                 {PROPERTY_NAME_OPTIONS.map((p) => (
                   <MenuItem key={p} value={p} sx={{ fontSize: 13 }}>{p}</MenuItem>
                 ))}
               </TextField>
-
-              <Box sx={{ flexBasis: '100%', height: 0 }} />
 
               <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
                 with a value
@@ -1213,37 +1293,53 @@ const SuppressionRulesDrawer = ({
               {renderPropertyOperatorSelect(propertyOperator1, setPropertyOperator1)}
 
               <TextField
+                variant="standard"
                 size="small"
                 placeholder="Value"
                 value={propertyVal1}
                 onChange={(e) => setPropertyVal1(e.target.value)}
-                sx={{ width: 100, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+                sx={{ width: 80, ...standardSelectSx }}
               />
 
               {!isBoth && !isDualCondition && (
-                <IconButton
+                <Button
                   size="small"
+                  variant="outlined"
+                  startIcon={<AddIcon sx={{ fontSize: 16 }} />}
                   onClick={() => setIsDualCondition(true)}
-                  sx={{ border: '1px solid #c2c9cd', borderRadius: '4px', p: 0.6, color: '#657075' }}
+                  sx={{
+                    textTransform: 'none',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: '#4a555b',
+                    borderColor: '#c2c9cd',
+                    borderRadius: '4px',
+                    py: 0.4,
+                    px: 1.25,
+                    height: 32,
+                    whiteSpace: 'nowrap',
+                    '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
+                  }}
                 >
-                  <AddIcon sx={{ fontSize: 16 }} />
-                </IconButton>
+                  Add a condition
+                </Button>
               )}
             </Box>
 
             {/* Line 2 (Dual Condition for Property) */}
             {!isBoth && isDualCondition && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                 <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
                   and the other has a property of
                 </Typography>
                 <TextField
                   select
+                  variant="standard"
                   size="small"
                   value={property2}
                   onChange={(e) => setProperty2(e.target.value)}
                   SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                  sx={{ width: 150, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+                  sx={{ width: 140, ...standardSelectSx }}
                 >
                   {PROPERTY_NAME_OPTIONS.map((p) => (
                     <MenuItem key={p} value={p} sx={{ fontSize: 13 }}>{p}</MenuItem>
@@ -1257,20 +1353,35 @@ const SuppressionRulesDrawer = ({
                 {renderPropertyOperatorSelect(propertyOperator2, setPropertyOperator2)}
 
                 <TextField
+                  variant="standard"
                   size="small"
                   placeholder="Value"
                   value={propertyVal2}
                   onChange={(e) => setPropertyVal2(e.target.value)}
-                  sx={{ width: 100, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+                  sx={{ width: 80, ...standardSelectSx }}
                 />
 
-                <IconButton
+                <Button
                   size="small"
+                  variant="outlined"
+                  startIcon={<RemoveIcon sx={{ fontSize: 16 }} />}
                   onClick={() => setIsDualCondition(false)}
-                  sx={{ border: '1px solid #c2c9cd', borderRadius: '4px', p: 0.6, color: '#657075' }}
+                  sx={{
+                    textTransform: 'none',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: '#4a555b',
+                    borderColor: '#c2c9cd',
+                    borderRadius: '4px',
+                    py: 0.4,
+                    px: 1.25,
+                    height: 32,
+                    whiteSpace: 'nowrap',
+                    '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
+                  }}
                 >
-                  <RemoveIcon sx={{ fontSize: 16 }} />
-                </IconButton>
+                  Remove condition
+                </Button>
               </Box>
             )}
           </Box>
@@ -1278,11 +1389,6 @@ const SuppressionRulesDrawer = ({
       }
 
       case 'Class': {
-        const schemaClassSelectSx = {
-          width: 140,
-          ...compactSelectSx,
-        };
-        const placeholder = <span style={{ color: '#8a9296' }}>Select</span>;
         const renderSchemaClassRow = (label, schema, setSchema, className, setClassName) => (
           <>
             <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>
@@ -1290,6 +1396,7 @@ const SuppressionRulesDrawer = ({
             </Typography>
             <TextField
               select
+              variant="standard"
               size="small"
               value={schema}
               onChange={(e) => {
@@ -1299,9 +1406,9 @@ const SuppressionRulesDrawer = ({
               SelectProps={{
                 IconComponent: KeyboardArrowDownIcon,
                 displayEmpty: true,
-                renderValue: (v) => v || placeholder,
+                renderValue: (v) => v || <span style={{ color: '#8a9296' }}>Select</span>,
               }}
-              sx={{ ...schemaClassSelectSx, width: 175 }}
+              sx={{ width: 160, ...standardSelectSx }}
             >
               {SCHEMA_OPTIONS.map((s) => (
                 <MenuItem key={s} value={s} sx={{ fontSize: 13 }}>{s}</MenuItem>
@@ -1314,6 +1421,7 @@ const SuppressionRulesDrawer = ({
               <span>
                 <TextField
                   select
+                  variant="standard"
                   size="small"
                   value={className}
                   disabled={!schema}
@@ -1321,9 +1429,9 @@ const SuppressionRulesDrawer = ({
                   SelectProps={{
                     IconComponent: KeyboardArrowDownIcon,
                     displayEmpty: true,
-                    renderValue: (v) => v || placeholder,
+                    renderValue: (v) => v || <span style={{ color: '#8a9296' }}>Select</span>,
                   }}
-                  sx={schemaClassSelectSx}
+                  sx={{ width: 140, ...standardSelectSx }}
                 >
                   {(SCHEMA_CLASS_OPTIONS[schema] || []).map((c) => (
                     <MenuItem key={c} value={c} sx={{ fontSize: 13 }}>{c}</MenuItem>
@@ -1339,13 +1447,27 @@ const SuppressionRulesDrawer = ({
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
               {renderSchemaClassRow('If one element has a schema of', schema1, setSchema1, class1, setClass1)}
               {!isDualCondition && (
-                <IconButton
+                <Button
                   size="small"
+                  variant="outlined"
+                  startIcon={<AddIcon sx={{ fontSize: 16 }} />}
                   onClick={() => setIsDualCondition(true)}
-                  sx={{ border: '1px solid #c2c9cd', borderRadius: '4px', p: 0.6, color: '#657075' }}
+                  sx={{
+                    textTransform: 'none',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: '#4a555b',
+                    borderColor: '#c2c9cd',
+                    borderRadius: '4px',
+                    py: 0.4,
+                    px: 1.25,
+                    height: 32,
+                    whiteSpace: 'nowrap',
+                    '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
+                  }}
                 >
-                  <AddIcon sx={{ fontSize: 16 }} />
-                </IconButton>
+                  Add a condition
+                </Button>
               )}
             </Box>
 
@@ -1353,13 +1475,27 @@ const SuppressionRulesDrawer = ({
             {isDualCondition && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
                 {renderSchemaClassRow('and the other has a schema of', schema2, setSchema2, class2, setClass2)}
-                <IconButton
+                <Button
                   size="small"
+                  variant="outlined"
+                  startIcon={<RemoveIcon sx={{ fontSize: 16 }} />}
                   onClick={() => setIsDualCondition(false)}
-                  sx={{ border: '1px solid #c2c9cd', borderRadius: '4px', p: 0.6, color: '#657075' }}
+                  sx={{
+                    textTransform: 'none',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    color: '#4a555b',
+                    borderColor: '#c2c9cd',
+                    borderRadius: '4px',
+                    py: 0.4,
+                    px: 1.25,
+                    height: 32,
+                    whiteSpace: 'nowrap',
+                    '&:hover': { borderColor: '#8a9499', backgroundColor: '#f5f7f8' },
+                  }}
                 >
-                  <RemoveIcon sx={{ fontSize: 16 }} />
-                </IconButton>
+                  Remove condition
+                </Button>
               </Box>
             )}
           </Box>
@@ -1374,11 +1510,12 @@ const SuppressionRulesDrawer = ({
             </Typography>
             <TextField
               select
+              variant="standard"
               size="small"
               value={selectedGroup}
               onChange={(e) => setSelectedGroup(e.target.value)}
               SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-              sx={{ width: 210, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+              sx={{ width: 210, ...standardSelectSx }}
             >
               {GROUP_OPTIONS.map((g) => (
                 <MenuItem key={g} value={g} sx={{ fontSize: 13 }}>{g}</MenuItem>
@@ -1391,14 +1528,15 @@ const SuppressionRulesDrawer = ({
       case 'Relationship': {
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap', mb: 3 }}>
-            <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#1c1f21' }}>If</Typography>
+            <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1c1f21' }}>If</Typography>
             <TextField
               select
+              variant="standard"
               size="small"
               value={relSourceClass}
               onChange={(e) => setRelSourceClass(e.target.value)}
               SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-              sx={{ width: 135, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+              sx={{ width: 135, ...standardSelectSx }}
             >
               {CLASS_NAME_OPTIONS.map((c) => (
                 <MenuItem key={c} value={c} sx={{ fontSize: 13 }}>{c}</MenuItem>
@@ -1408,11 +1546,12 @@ const SuppressionRulesDrawer = ({
             <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>is related to</Typography>
             <TextField
               select
+              variant="standard"
               size="small"
               value={relTargetClass}
               onChange={(e) => setRelTargetClass(e.target.value)}
               SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-              sx={{ width: 135, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+              sx={{ width: 135, ...standardSelectSx }}
             >
               {CLASS_NAME_OPTIONS.map((c) => (
                 <MenuItem key={c} value={c} sx={{ fontSize: 13 }}>{c}</MenuItem>
@@ -1422,11 +1561,12 @@ const SuppressionRulesDrawer = ({
             <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>via</Typography>
             <TextField
               select
+              variant="standard"
               size="small"
               value={relViaClass}
               onChange={(e) => setRelViaClass(e.target.value)}
               SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-              sx={{ width: 135, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+              sx={{ width: 135, ...standardSelectSx }}
             >
               {CLASS_NAME_OPTIONS.map((c) => (
                 <MenuItem key={c} value={c} sx={{ fontSize: 13 }}>{c}</MenuItem>
@@ -1436,11 +1576,12 @@ const SuppressionRulesDrawer = ({
             <Typography sx={{ fontSize: 13, fontWeight: 600, color: '#1c1f21' }}>in the</Typography>
             <TextField
               select
+              variant="standard"
               size="small"
               value={relDirection}
               onChange={(e) => setRelDirection(e.target.value)}
               SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-              sx={{ width: 110, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+              sx={{ width: 110, ...standardSelectSx }}
             >
               {DIRECTION_OPTIONS.map((d) => (
                 <MenuItem key={d} value={d} sx={{ fontSize: 13 }}>{d}</MenuItem>
@@ -1455,14 +1596,15 @@ const SuppressionRulesDrawer = ({
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-              <Typography sx={{ fontSize: 13, fontWeight: 500, color: '#1c1f21' }}>If</Typography>
+              <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1c1f21' }}>If</Typography>
               <TextField
                 select
+                variant="standard"
                 size="small"
                 value={ecsqlTarget}
                 onChange={(e) => setEcsqlTarget(e.target.value)}
                 SelectProps={{ IconComponent: KeyboardArrowDownIcon }}
-                sx={{ width: 160, '& .MuiOutlinedInput-root': { height: 34, fontSize: 13 } }}
+                sx={{ width: 160, ...standardSelectSx }}
               >
                 {TARGET_OPTIONS.map((t) => (
                   <MenuItem key={t} value={t} sx={{ fontSize: 13 }}>{t}</MenuItem>
@@ -1508,143 +1650,102 @@ const SuppressionRulesDrawer = ({
 
   // Render the formatted rule card matching each column in the matrix screenshot
   const renderRuleCardContent = (rule) => {
-    switch (rule.suppressBasedOn) {
+    const textSx = {
+      fontSize: 14,
+      color: '#1c1f21',
+      lineHeight: 1.5,
+      mt: 1.75,
+    };
+
+    const ruleType = rule.suppressBasedOn || 'Category';
+
+    switch (ruleType) {
       case 'Model': {
         if (rule.targetScope === 'both elements') {
           return (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
-              <Typography sx={{ fontSize: 13, color: '#4a555b' }}>Suppress if</Typography>
-              <Pill>{rule.targetScope || 'both elements'}</Pill>
-              <Pill>are in the same model</Pill>
-            </Box>
+            <Typography sx={textSx}>
+              Suppress if both elements are in the same model.
+            </Typography>
           );
         }
+        const first = `Suppress if one model ${rule.nameMatchOperator1 || 'is exactly'} ${rule.attribute1 || MODEL_NAME_OPTIONS[0]}`;
+        const second = rule.isDualCondition
+          ? ` and the other model ${rule.nameMatchOperator2 || 'matches'} ${rule.attribute2 || MODEL_NAME_OPTIONS[1]}`
+          : '';
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>Suppress if</Typography>
-            <Pill>{rule.targetScope || 'one element'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>belongs to a model with a name that</Typography>
-            <Pill>{rule.nameMatchOperator1 || 'is exactly'}</Pill>
-            <Pill>{rule.attribute1 || 'Pipes'}</Pill>
-            {rule.isDualCondition && (
-              <>
-                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other has a model named that</Typography>
-                <Pill>{rule.nameMatchOperator2 || 'matches'}</Pill>
-                <Pill>{rule.attribute2 || 'Walls'}</Pill>
-              </>
-            )}
-          </Box>
+          <Typography sx={textSx}>
+            {`${first}${second}.`}
+          </Typography>
         );
       }
 
       case 'Category': {
         if (rule.targetScope === 'both elements') {
           return (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
-              <Typography sx={{ fontSize: 13, color: '#4a555b' }}>Suppress if</Typography>
-              <Pill>{rule.targetScope || 'both elements'}</Pill>
-              <Pill>are in the same category</Pill>
-            </Box>
+            <Typography sx={textSx}>
+              Suppress if both elements are in the same category.
+            </Typography>
           );
         }
+        const first = `Suppress if one category ${rule.nameMatchOperator1 || 'is exactly'} ${rule.attribute1 || MODEL_NAME_OPTIONS[0]}`;
+        const second = rule.isDualCondition
+          ? ` and the other category ${rule.nameMatchOperator2 || 'matches'} ${rule.attribute2 || MODEL_NAME_OPTIONS[1]}`
+          : '';
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>Suppress if</Typography>
-            <Pill>{rule.targetScope || 'one element'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>has a category name that</Typography>
-            <Pill>{rule.nameMatchOperator1 || 'is exactly'}</Pill>
-            <Pill>{rule.attribute1 || 'Pipes'}</Pill>
-            {rule.isDualCondition && (
-              <>
-                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other has a category name that</Typography>
-                <Pill>{rule.nameMatchOperator2 || 'matches'}</Pill>
-                <Pill>{rule.attribute2 || 'Walls'}</Pill>
-              </>
-            )}
-          </Box>
+          <Typography sx={textSx}>
+            {`${first}${second}.`}
+          </Typography>
         );
       }
 
       case 'Property': {
         const isBoth = rule.targetScope === 'both elements';
+        const scope = rule.targetScope || 'one element';
+        const first = `Suppress if ${scope} ${isBoth ? 'have' : 'has'} a property of ${rule.property1 || '@Design'} with a value ${rule.propertyOperator1 || 'equal to'} ${rule.propertyVal1 || '36'}`;
+        const second = !isBoth && rule.isDualCondition
+          ? ` and the other has a property of ${rule.property2 || '@Window'} with a value ${rule.propertyOperator2 || 'equal to'} ${rule.propertyVal2 || '42'}`
+          : '';
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>Suppress if</Typography>
-            <Pill>{rule.targetScope || 'one element'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>
-              {isBoth ? 'have a property of' : 'has a property of'}
-            </Typography>
-            <Pill>{rule.property1 || '@Design'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>with a value</Typography>
-            <Pill>{rule.propertyOperator1 || 'equal to'}</Pill>
-            <Pill>{rule.propertyVal1 || '36'}</Pill>
-            {!isBoth && rule.isDualCondition && (
-              <>
-                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other has a property of</Typography>
-                <Pill>{rule.property2 || '@Window'}</Pill>
-                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>with a value</Typography>
-                <Pill>{rule.propertyOperator2 || 'equal to'}</Pill>
-                <Pill>{rule.propertyVal2 || '42'}</Pill>
-              </>
-            )}
-          </Box>
+          <Typography sx={textSx}>
+            {`${first}${second}.`}
+          </Typography>
         );
       }
 
       case 'Class': {
+        const first = `Suppress if one element has a schema of ${rule.schema1 || '—'} and a class of ${rule.class1 || '—'}`;
+        const second = rule.isDualCondition
+          ? ` and the other has a schema of ${rule.schema2 || '—'} and a class of ${rule.class2 || '—'}`
+          : '';
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>Suppress if one element has a schema of</Typography>
-            <Pill>{rule.schema1 || '—'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and a class of</Typography>
-            <Pill>{rule.class1 || '—'}</Pill>
-            {rule.isDualCondition && (
-              <>
-                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and the other has a schema of</Typography>
-                <Pill>{rule.schema2 || '—'}</Pill>
-                <Typography sx={{ fontSize: 13, color: '#4a555b' }}>and a class of</Typography>
-                <Pill>{rule.class2 || '—'}</Pill>
-              </>
-            )}
-          </Box>
+          <Typography sx={textSx}>
+            {`${first}${second}.`}
+          </Typography>
         );
       }
 
       case 'Group': {
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>
-              If one of the elements belongs to the group(s)
-            </Typography>
-            <Pill>{rule.selectedGroup || 'Plumbing'}</Pill>
-          </Box>
+          <Typography sx={textSx}>
+            {`Suppress if one of the elements belongs to the group(s) ${rule.selectedGroup || 'Plumbing'}.`}
+          </Typography>
         );
       }
 
       case 'Relationship': {
         return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mt: 1.25 }}>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>If</Typography>
-            <Pill>{rule.relSourceClass || '@Design'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>{rule.relVerb || 'is related to'}</Typography>
-            <Pill>{rule.relTargetClass || '@Window'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>via</Typography>
-            <Pill>{rule.relViaClass || '@Box'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>in the</Typography>
-            <Pill>{rule.relDirection || 'forward'}</Pill>
-            <Typography sx={{ fontSize: 13, color: '#4a555b' }}>direction</Typography>
-          </Box>
+          <Typography sx={textSx}>
+            {`Suppress if ${rule.relSourceClass || '@Design'} ${rule.relVerb || 'is related to'} ${rule.relTargetClass || '@Window'} via ${rule.relViaClass || '@Box'} in the ${rule.relDirection || 'forward'} direction.`}
+          </Typography>
         );
       }
 
       case 'ECSQL expression': {
         return (
-          <Box sx={{ mt: 1.25 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
-              <Typography sx={{ fontSize: 13, color: '#4a555b' }}>If</Typography>
-              <Pill>{rule.ecsqlTarget || 'one element'}</Pill>
-              <Typography sx={{ fontSize: 13, color: '#4a555b' }}>{rule.ecsqlIntro || 'meets the expression'}</Typography>
-            </Box>
+          <Box sx={{ mt: 1.75 }}>
+            <Typography sx={{ fontSize: 14, color: '#1c1f21', lineHeight: 1.5, mb: 1.25 }}>
+              {`Suppress if ${rule.ecsqlTarget || 'one element'} ${rule.ecsqlIntro || 'meets the expression'}:`}
+            </Typography>
             <Paper
               elevation={0}
               sx={{
@@ -1964,17 +2065,26 @@ const SuppressionRulesDrawer = ({
         <Paper
           elevation={0}
           sx={{
-            border: '1.5px solid #087f6c',
-            borderRadius: '8px',
+            border: '1px solid #d4d8db',
+            borderLeft: '4px solid #087f6c',
+            borderRadius: '4px',
             p: 2.5,
             mb: 3,
             backgroundColor: '#fff',
           }}
         >
           {/* Row 1: Rule name* & Description */}
-          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-            <Box sx={{ flex: 1 }}>
-              <Typography sx={{ fontSize: 12, color: '#4a555b', fontWeight: 500, mb: 0.5 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 0.7fr) minmax(0, 1.3fr)',
+              gap: 2,
+              mb: 2.5,
+              '@media (max-width: 760px)': { gridTemplateColumns: '1fr' },
+            }}
+          >
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: 12.5, color: '#4a555b', fontWeight: 500, mb: 0.5 }}>
                 Rule name<span style={{ color: '#d32f2f' }}>*</span>
               </Typography>
               <TextField
@@ -1982,7 +2092,12 @@ const SuppressionRulesDrawer = ({
                 size="small"
                 fullWidth
                 value={ruleName}
-                onChange={(e) => setRuleName(e.target.value)}
+                error={ruleNameError}
+                helperText={ruleNameError ? 'Rule name is required' : undefined}
+                onChange={(e) => {
+                  setRuleName(e.target.value);
+                  if (e.target.value.trim()) setRuleNameError(false);
+                }}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     height: 34,
@@ -1996,8 +2111,8 @@ const SuppressionRulesDrawer = ({
               />
             </Box>
 
-            <Box sx={{ flex: 1.5 }}>
-              <Typography sx={{ fontSize: 12, color: '#4a555b', fontWeight: 500, mb: 0.5 }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontSize: 12.5, color: '#4a555b', fontWeight: 500, mb: 0.5 }}>
                 Description
               </Typography>
               <TextField
@@ -2021,12 +2136,13 @@ const SuppressionRulesDrawer = ({
           </Box>
 
           {/* Row 2: Suppress based on* */}
-          <Box sx={{ mb: 2.5, width: '42%', maxWidth: 280 }}>
-            <Typography sx={{ fontSize: 12, color: '#4a555b', fontWeight: 500, mb: 0.5 }}>
+          <Box sx={{ mb: 3, width: 260 }}>
+            <Typography sx={{ fontSize: 12.5, color: '#4a555b', fontWeight: 500, mb: 0.5 }}>
               Suppress based on<span style={{ color: '#d32f2f' }}>*</span>
             </Typography>
             <TextField
               select
+              variant="standard"
               size="small"
               fullWidth
               value={suppressBasedOn}
@@ -2035,14 +2151,10 @@ const SuppressionRulesDrawer = ({
                 IconComponent: KeyboardArrowDownIcon,
               }}
               sx={{
-                '& .MuiOutlinedInput-root': {
-                  height: 34,
-                  fontSize: 13,
-                  borderRadius: '4px',
-                  '& fieldset': { borderColor: '#c2c9cd' },
-                  '&:hover fieldset': { borderColor: '#8a9499' },
-                  '&.Mui-focused fieldset': { borderColor: '#087f6c' },
-                },
+                '& .MuiInput-underline:before': { borderColor: '#8a9499' },
+                '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderColor: '#1c1f21' },
+                '& .MuiInput-underline:after': { borderColor: '#087f6c' },
+                '& .MuiSelect-select': { fontSize: 14, color: '#1c1f21', py: 0.6 },
               }}
             >
               {SUPPRESS_BASED_OPTIONS.map((opt) => (
@@ -2080,6 +2192,7 @@ const SuppressionRulesDrawer = ({
               variant="contained"
               size="small"
               onClick={handleSave}
+              disabled={!ruleName.trim()}
               sx={{
                 textTransform: 'none',
                 backgroundColor: '#087f6c',
